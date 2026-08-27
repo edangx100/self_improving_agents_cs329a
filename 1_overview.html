@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AI learned to improve itself — Stanford CS329A, Lesson 1</title>
+<meta name="description" content="A plain-language explainer of Lesson 1 of Stanford CS329A: Self-Improving AI Agents — scaling laws, post-training, test-time compute, agents, and why verification is the bottleneck.">
+<style>
+  :root{
+    --ground:#0B1220;
+    --surface:#131C2E;
+    --surface-2:#1A2540;
+    --rule:#26324B;
+    --ink:#DDE4F2;
+    --ink-dim:#94A2BE;
+    --ink-faint:#64728E;
+
+    --c-pre:#5FD3C4;   /* pre-training scale */
+    --c-post:#F2A65A;  /* post-training */
+    --c-test:#EE6A8C;  /* test-time compute */
+    --c-agent:#9B8CFF; /* agents */
+
+    --font-display:"Iowan Old Style","Charter","Bitstream Charter","Palatino Linotype",Palatino,Georgia,serif;
+    --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+
+    --prose:min(100%, 44rem);
+    --wide:min(100%, 62rem);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    /* faint plotting grid, the page's ambient material */
+    content:"";
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(to right, rgba(148,162,190,.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148,162,190,.055) 1px, transparent 1px);
+    background-size:64px 64px;
+    mask-image:linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.15));
+    -webkit-mask-image:linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.15));
+  }
+
+  .wrap{position:relative; z-index:1; padding:0 clamp(1.1rem,4vw,2.5rem)}
+  .prose{width:var(--prose); margin-inline:auto}
+  .wide{width:var(--wide); margin-inline:auto}
+
+  /* ---------- type ---------- */
+  h1,h2,h3{font-family:var(--font-display); font-weight:600; letter-spacing:-.015em; line-height:1.12; margin:0}
+  h1{font-size:clamp(2.3rem,6.2vw,4rem)}
+  h2{font-size:clamp(1.6rem,3.6vw,2.3rem)}
+  h3{font-size:1.12rem; font-family:var(--font-body); font-weight:650; letter-spacing:-.005em}
+  p{margin:0 0 1.1em}
+  a{color:inherit; text-decoration-color:var(--ink-faint); text-underline-offset:3px}
+  a:hover{text-decoration-color:currentColor}
+  strong{font-weight:650; color:#fff}
+
+  .eyebrow{
+    font-family:var(--font-mono); font-size:.72rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink-faint); margin:0 0 .9rem;
+  }
+
+  /* ---------- hero ---------- */
+  header.hero{padding:clamp(3rem,9vw,6rem) 0 1rem}
+  .kicker{
+    font-family:var(--font-mono); font-size:.74rem; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--c-pre); margin:0 0 1.6rem;
+  }
+  .lede{
+    font-family:var(--font-display);
+    font-size:clamp(1.25rem,2.9vw,1.6rem);
+    line-height:1.4; color:var(--ink);
+    margin:1.6rem 0 0; max-width:36ch;
+    border-left:2px solid var(--c-test); padding-left:1.1rem;
+  }
+  .meta{
+    width:var(--prose); margin:2.6rem auto 0; padding-top:1.2rem;
+    border-top:1px solid var(--rule);
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1.1rem 1.6rem;
+  }
+  .meta div{font-size:.85rem; line-height:1.45}
+  .meta dt{font-family:var(--font-mono); font-size:.68rem; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-faint); margin-bottom:.25rem}
+  .meta dd{margin:0; color:var(--ink-dim)}
+
+  /* ---------- sections ---------- */
+  section{padding:clamp(2.6rem,6vw,4.4rem) 0}
+  section + section{border-top:1px solid var(--rule)}
+  .sec-head{width:var(--prose); margin:0 auto 1.8rem}
+
+  /* the four acts get their own colour, mapped to the hero curve */
+  .act .eyebrow{color:var(--act)}
+  .act .sec-head h2::after{
+    content:""; display:block; width:2.4rem; height:3px; margin-top:.9rem;
+    background:var(--act); border-radius:2px;
+  }
+  #scale{--act:var(--c-pre)}
+  #post{--act:var(--c-post)}
+  #inference{--act:var(--c-test)}
+  #agents{--act:var(--c-agent)}
+  #verify{--act:#8FA3C4}
+
+  figure{margin:2rem auto; width:var(--wide)}
+  figure svg{display:block; width:100%; height:auto}
+  figcaption{
+    font-family:var(--font-mono); font-size:.74rem; line-height:1.6;
+    color:var(--ink-faint); margin-top:.9rem; max-width:60ch;
+  }
+
+  .card{
+    background:var(--surface); border:1px solid var(--rule);
+    border-radius:10px; padding:1.3rem 1.4rem;
+  }
+  .card h3{margin-bottom:.4rem}
+  .card p:last-child{margin-bottom:0}
+  .note{border-left:3px solid var(--c-test); background:var(--surface); border-radius:0 8px 8px 0;
+    padding:1.1rem 1.3rem; margin:1.8rem auto; width:var(--prose)}
+  .note p:last-child{margin-bottom:0}
+  .note .eyebrow{color:var(--c-test)}
+
+  .grid2{display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+
+  ol.takeaways{counter-reset:t; list-style:none; padding:0; margin:0}
+  ol.takeaways li{
+    counter-increment:t; position:relative; padding:1rem 0 1rem 3.2rem;
+    border-bottom:1px solid var(--rule);
+  }
+  ol.takeaways li:first-child{border-top:1px solid var(--rule)}
+  ol.takeaways li::before{
+    content:counter(t,decimal-leading-zero);
+    position:absolute; left:0; top:1.05rem;
+    font-family:var(--font-mono); font-size:.78rem; color:var(--ink-faint); letter-spacing:.06em;
+  }
+
+  /* glossary */
+  dl.gloss{margin:0; display:grid; gap:1.1rem}
+  dl.gloss dt{font-weight:650; color:#fff; font-size:.95rem}
+  dl.gloss dd{margin:.15rem 0 0; color:var(--ink-dim); font-size:.95rem}
+
+  /* roadmap */
+  ul.road{list-style:none; padding:0; margin:0; border-top:1px solid var(--rule)}
+  ul.road li{
+    display:grid; grid-template-columns:5.2rem 1fr; gap:1rem;
+    padding:.85rem 0; border-bottom:1px solid var(--rule); align-items:baseline;
+  }
+  ul.road b{font-family:var(--font-mono); font-size:.72rem; letter-spacing:.08em;
+    color:var(--ink-faint); font-weight:400; text-transform:uppercase}
+  ul.road span{font-size:.97rem}
+  @media (max-width:520px){
+    ul.road li{grid-template-columns:1fr; gap:.15rem}
+  }
+
+  footer{padding:3rem 0 5rem; border-top:1px solid var(--rule)}
+  footer p{font-size:.85rem; color:var(--ink-dim)}
+  footer .eyebrow{margin-bottom:1.2rem}
+
+  /* ---------- svg shared ---------- */
+  .axis{stroke:var(--rule); stroke-width:1.5}
+  .tick{stroke:var(--rule); stroke-width:1}
+  .lbl{font-family:var(--font-mono); font-size:11px; fill:var(--ink-faint)}
+  .lbl-b{font-family:var(--font-mono); font-size:11.5px; fill:var(--ink-dim)}
+  .lbl-t{font-family:var(--font-body); font-size:13px; fill:var(--ink); font-weight:600}
+  .curve{fill:none; stroke-width:3; stroke-linecap:round}
+  .ceil{fill:none; stroke:var(--ink-faint); stroke-width:2; stroke-dasharray:5 6; stroke-linecap:round}
+  .s-pre{stroke:var(--c-pre)} .s-post{stroke:var(--c-post)}
+  .s-test{stroke:var(--c-test)} .s-agent{stroke:var(--c-agent)}
+  .f-pre{fill:var(--c-pre)} .f-post{fill:var(--c-post)}
+  .f-test{fill:var(--c-test)} .f-agent{fill:var(--c-agent)}
+  .box{fill:var(--surface-2); stroke:var(--rule); stroke-width:1.5}
+  .arrow{stroke:var(--ink-faint); stroke-width:1.8; fill:none}
+
+  /* one orchestrated moment: the hero curve draws itself */
+  .draw{stroke-dasharray:1000; stroke-dashoffset:1000; animation:draw 1.5s cubic-bezier(.4,0,.2,1) forwards}
+  .d2{animation-delay:.5s} .d3{animation-delay:1s} .d4{animation-delay:1.5s}
+  .fade{opacity:0; animation:fade .7s ease forwards}
+  .fd1{animation-delay:1.7s} .fd2{animation-delay:1.9s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes fade{to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){
+    .draw{animation:none; stroke-dashoffset:0}
+    .fade{animation:none; opacity:1}
+  }
+  :focus-visible{outline:2px solid var(--c-pre); outline-offset:3px; border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ 1. TITLE + ONE-SENTENCE SUMMARY ============ -->
+<header class="hero">
+  <div class="prose">
+    <p class="kicker">Stanford CS329A · Lesson 1 · Course overview</p>
+    <h1>How AI learned<br>to improve itself</h1>
+    <p class="lede">Making models bigger used to be the only way forward; now the gains come from letting a model think longer, act in the world, and check its own work.</p>
+  </div>
+  <dl class="meta">
+    <div><dt>Course</dt><dd>Self-Improving AI Agents, Stanford</dd></div>
+    <div><dt>Taught by</dt><dd>Aakanksha Chowdhery &amp; Azalia Mirhoseini</dd></div>
+    <div><dt>Runtime</dt><dd>1 hr 10 min</dd></div>
+    <div><dt>Watch</dt><dd><a href="https://www.youtube.com/watch?v=6YnLB0XbTnI">Lecture on YouTube</a> · <a href="https://cs329a.stanford.edu/">cs329a.stanford.edu</a></dd></div>
+  </dl>
+</header>
+
+<!-- ============ 2. PLAIN-LANGUAGE INTRO ============ -->
+<section id="intro">
+  <div class="prose">
+    <p style="font-size:1.06rem">This first lecture is a map, not a lesson. Over about an hour the two instructors walk through the last eight years of AI progress and show that it came in four distinct pushes. Each push worked brilliantly for a while, ran out of room, and was replaced by a push in a different direction. Their claim is that we are living in the fourth one, and that its limit is already visible.</p>
+    <p>Nothing here requires knowing how a model is built. If you can accept that an AI system is trained on a lot of text and then answers questions, you have enough to follow the whole argument. The words the lecture leans on — scaling, post-training, test-time compute, agent, verifier — are explained as they arrive, and collected again at the bottom.</p>
+  </div>
+</section>
+
+<!-- ============ 3. SIGNATURE FIGURE: THE WHOLE ARGUMENT ============ -->
+<section id="arc">
+  <div class="sec-head">
+    <p class="eyebrow">The argument in one picture</p>
+    <h2>Four pushes, four ceilings</h2>
+  </div>
+  <div class="prose">
+    <p>Read the curve left to right. Every coloured segment is a period when one idea was making AI visibly better. Every dashed flat stretch is that idea running out of room. Progress restarted each time not by doing more of the same thing, but by spending effort somewhere new.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 440" role="img" aria-label="A rising staircase of four curves. Each coloured curve climbs, then flattens into a dashed ceiling, before a new coloured curve resumes the climb: pre-training scale, post-training, test-time compute, and agentic loops.">
+      <!-- axes -->
+      <line class="axis" x1="58" y1="30" x2="58" y2="382"/>
+      <line class="axis" x1="58" y1="382" x2="890" y2="382"/>
+      <text class="lbl" x="12" y="212" transform="rotate(-90 12 212)" text-anchor="middle">how capable</text>
+      <text class="lbl" x="474" y="410" text-anchor="middle">time, and where the effort was spent</text>
+
+      <!-- act 1 -->
+      <path class="curve s-pre draw" d="M70,352 C120,346 168,312 224,286"/>
+      <path class="ceil fade fd1" d="M224,286 H306"/>
+      <text class="lbl-b f-pre" x="70" y="332">2018–2024</text>
+      <text class="lbl-t" x="70" y="316" fill="#DDE4F2">Make it bigger</text>
+
+      <!-- act 2 -->
+      <path class="curve s-post draw d2" d="M306,286 C356,278 392,240 446,222"/>
+      <path class="ceil fade fd1" d="M446,222 H520"/>
+      <text class="lbl-b f-post" x="300" y="264">2022</text>
+      <text class="lbl-t" x="300" y="248">Teach it to be useful</text>
+
+      <!-- act 3 -->
+      <path class="curve s-test draw d3" d="M520,222 C568,214 600,166 654,146"/>
+      <path class="ceil fade fd2" d="M654,146 H720"/>
+      <text class="lbl-b f-test" x="514" y="188">2024–2025</text>
+      <text class="lbl-t" x="514" y="172">Let it think longer</text>
+
+      <!-- act 4 -->
+      <path class="curve s-agent draw d4" d="M720,146 C766,136 812,96 878,64"/>
+      <text class="lbl-b f-agent" x="672" y="112">2025 →</text>
+      <text class="lbl-t" x="672" y="96">Let it act, and check</text>
+
+      <!-- ceiling annotations -->
+      <g class="fade fd2">
+        <text class="lbl" x="265" y="304" text-anchor="middle">ceiling</text>
+        <text class="lbl" x="483" y="240" text-anchor="middle">ceiling</text>
+        <text class="lbl" x="687" y="164" text-anchor="middle">ceiling</text>
+        <text class="lbl" x="806" y="42" text-anchor="middle" style="fill:var(--c-agent)">we are here</text>
+      </g>
+    </svg>
+    <figcaption>Schematic, not measured data. The point is the shape: each regime saturates, and the next one starts from where the last one stopped rather than replacing it.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 4. ACT ONE ============ -->
+<section id="scale" class="act">
+  <div class="sec-head">
+    <p class="eyebrow">Push one · 2018–2024</p>
+    <h2>Make it bigger</h2>
+  </div>
+  <div class="prose">
+    <p>For six years the recipe was almost embarrassingly simple. Add more text, add more computer chips, add more internal settings for the model to tune — and the model gets measurably better. Not sometimes. Predictably, along a smooth curve you could plot in advance. These are the <strong>scaling laws</strong>, and they are why model sizes went from a few hundred million adjustable parameters in 2018 to something in the trillions by 2024.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 250" role="img" aria-label="Three small plots side by side. In each, error falls steadily as compute, data, or model size increases.">
+      <g>
+        <!-- panel template repeated three times -->
+        <g transform="translate(30,20)">
+          <line class="axis" x1="34" y1="0" x2="34" y2="168"/>
+          <line class="axis" x1="34" y1="168" x2="248" y2="168"/>
+          <path class="curve s-pre" d="M46,26 C92,84 140,124 240,150" opacity=".95"/>
+          <text class="lbl" x="141" y="196" text-anchor="middle">more computing power</text>
+          <text class="lbl" x="14" y="84" text-anchor="middle" transform="rotate(-90 14 84)">error</text>
+        </g>
+        <g transform="translate(320,20)">
+          <line class="axis" x1="34" y1="0" x2="34" y2="168"/>
+          <line class="axis" x1="34" y1="168" x2="248" y2="168"/>
+          <path class="curve s-pre" d="M46,32 C96,90 146,128 240,152" opacity=".95"/>
+          <text class="lbl" x="141" y="196" text-anchor="middle">more training text</text>
+        </g>
+        <g transform="translate(610,20)">
+          <line class="axis" x1="34" y1="0" x2="34" y2="168"/>
+          <line class="axis" x1="34" y1="168" x2="248" y2="168"/>
+          <path class="curve s-pre" d="M46,22 C90,80 138,122 240,148" opacity=".95"/>
+          <text class="lbl" x="141" y="196" text-anchor="middle">bigger model</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>The three scaling-law panels the lecture opens with. Turn any one dial up and prediction error goes down along a curve you can extrapolate.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>Size bought two things beyond a better score. The first was <strong>learning from examples in the prompt</strong>: instead of retraining a model for each new job, you just show it two or three examples of what you want and it copies the pattern. The second was stranger — abilities that are simply absent in smaller models and appear once the model crosses a size threshold.</p>
+    <p>The standard example is <strong>chain of thought</strong>. Ask a model a word problem about tennis balls and it may get it wrong. Show it one worked example where the reasoning is written out step by step, and a large model starts writing out its own steps and gets it right. Show that same example to a model roughly a tenth the size and nothing happens at all. That threshold is a large part of why laboratories kept spending on scale: not for the predictable gain, but for the unpredictable one waiting on the other side.</p>
+  </div>
+</section>
+
+<!-- ============ 5. ACT TWO ============ -->
+<section id="post" class="act">
+  <div class="sec-head">
+    <p class="eyebrow">Push two · 2022</p>
+    <h2>Teach it to be useful</h2>
+  </div>
+  <div class="prose">
+    <p>ChatGPT reached a million users in five days, and the model underneath was not dramatically bigger than what already existed. What changed was everything layered on top of the raw model — the <strong>post-training</strong> stack.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 300" role="img" aria-label="Four stacked bars of decreasing width: pre-training on everything, fine-tuning on high quality writing, instruction tuning, and learning from human ratings.">
+      <g transform="translate(40,26)">
+        <rect class="box" x="0" y="0" width="560" height="52" rx="6"/>
+        <text class="lbl-t" x="18" y="24">Pre-training</text>
+        <text class="lbl" x="18" y="42">read essentially everything, predict the next word</text>
+
+        <rect class="box" x="0" y="64" width="400" height="52" rx="6" style="stroke:var(--c-post)"/>
+        <text class="lbl-t" x="18" y="88">Fine-tuning on good writing</text>
+        <text class="lbl" x="18" y="106">books and curated text, bought at high cost</text>
+
+        <rect class="box" x="0" y="128" width="280" height="52" rx="6" style="stroke:var(--c-post)"/>
+        <text class="lbl-t" x="18" y="152">Instruction tuning</text>
+        <text class="lbl" x="18" y="170">worked examples of following an instruction</text>
+
+        <rect class="box" x="0" y="192" width="180" height="52" rx="6" style="stroke:var(--c-post)"/>
+        <text class="lbl-t" x="18" y="216">Human ratings</text>
+        <text class="lbl" x="18" y="234">people pick the better of two answers</text>
+
+        <!-- volume annotation -->
+        <line class="arrow" x1="600" y1="14" x2="600" y2="230" style="stroke:var(--c-post);stroke-dasharray:4 5"/>
+        <text class="lbl-b" x="616" y="60" style="fill:var(--c-post)">less data,</text>
+        <text class="lbl-b" x="616" y="78" style="fill:var(--c-post)">more care,</text>
+        <text class="lbl-b" x="616" y="96" style="fill:var(--c-post)">more effect</text>
+        <text class="lbl" x="616" y="184">all four steps change</text>
+        <text class="lbl" x="616" y="200">the model itself —</text>
+        <text class="lbl" x="616" y="216">before you ever</text>
+        <text class="lbl" x="616" y="232">ask it anything</text>
+      </g>
+    </svg>
+    <figcaption>Each layer uses less data than the one below it and has more influence on how the finished system behaves.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>The last layer is the interesting one. Rather than telling the model the right answer, people are shown two of its answers and asked which is better. Those preferences train a second, smaller model — a <strong>reward model</strong> — whose only job is to score answers. That scorer then nudges the main model. The score can be split into parts and weighted: is it correct, is it helpful, is it specific, is it harmless.</p>
+    <p>Hold onto one detail: every step here edits the model in advance. Once training stops, the model is fixed. That assumption is what the next push breaks.</p>
+  </div>
+</section>
+
+<!-- ============ 6. ACT THREE ============ -->
+<section id="inference" class="act">
+  <div class="sec-head">
+    <p class="eyebrow">Push three · 2024–2025</p>
+    <h2>Let it think longer</h2>
+  </div>
+  <div class="prose">
+    <p>Here is the pivot of the lecture. You can make a model dramatically better <em>at the moment you use it</em>, without changing a single thing about the model.</p>
+    <p>Mirhoseini's lab showed this with an experiment named after the infinite monkey theorem. Take a small, cheap, open model. Instead of asking it a hard coding problem once, ask it ten thousand times. Then run the unit tests on every answer and keep one that passes. A model far weaker than the leading commercial system on a single try <strong>beats it</strong> once you let it sample enough times.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 320" role="img" aria-label="Left: a plot where a small model's success rate climbs steadily with the number of attempts and crosses a dashed line marking a large model's single-attempt score. Right: many candidate answers funnelled through a verifier which keeps the correct one.">
+      <!-- left plot -->
+      <g transform="translate(30,24)">
+        <line class="axis" x1="42" y1="8" x2="42" y2="222"/>
+        <line class="axis" x1="42" y1="222" x2="410" y2="222"/>
+        <path class="ceil" d="M42,104 H410"/>
+        <text class="lbl" x="406" y="94" text-anchor="end">big model, one try</text>
+        <path class="curve s-test" d="M56,206 C140,180 220,120 400,44"/>
+        <circle class="f-test" cx="56" cy="206" r="4.5"/>
+        <circle class="f-test" cx="400" cy="44" r="4.5"/>
+        <text class="lbl-b" x="66" y="196" style="fill:var(--c-test)">small model, one try</text>
+        <text class="lbl-b" x="396" y="34" text-anchor="end" style="fill:var(--c-test)">small model, 10,000 tries</text>
+        <text class="lbl" x="42" y="244">1</text>
+        <text class="lbl" x="410" y="244" text-anchor="end">10,000 attempts</text>
+        <text class="lbl" x="18" y="116" text-anchor="middle" transform="rotate(-90 18 116)">problems solved</text>
+      </g>
+
+      <!-- right funnel -->
+      <g transform="translate(510,40)">
+        <text class="lbl-b" x="0" y="0">one problem, many attempts</text>
+        <g>
+          <rect class="box" x="0" y="16" width="120" height="22" rx="4"/>
+          <rect class="box" x="0" y="44" width="120" height="22" rx="4"/>
+          <rect class="box" x="0" y="72" width="120" height="22" rx="4" style="stroke:var(--c-test)"/>
+          <rect class="box" x="0" y="100" width="120" height="22" rx="4"/>
+          <rect class="box" x="0" y="128" width="120" height="22" rx="4"/>
+          <text class="lbl" x="14" y="31">answer</text>
+          <text class="lbl" x="14" y="59">answer</text>
+          <text class="lbl" x="14" y="87" style="fill:var(--c-test)">answer ✓</text>
+          <text class="lbl" x="14" y="115">answer</text>
+          <text class="lbl" x="14" y="143">answer</text>
+        </g>
+        <path class="arrow" d="M126,83 H176" marker-end="url(#ar)"/>
+        <rect class="box" x="180" y="60" width="128" height="46" rx="6" style="stroke:var(--c-test)"/>
+        <text class="lbl-t" x="244" y="80" text-anchor="middle">the verifier</text>
+        <text class="lbl" x="244" y="97" text-anchor="middle">runs the tests</text>
+        <path class="arrow" d="M244,112 V148" marker-end="url(#ar)"/>
+        <text class="lbl-b" x="244" y="168" text-anchor="middle" style="fill:var(--c-test)">keeps the one that works</text>
+      </g>
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#64728E"/>
+        </marker>
+      </defs>
+    </svg>
+    <figcaption>On some problems only three or four of ten thousand attempts were correct — which is the whole point. The ability was already in the model; the attempts and the verifier are what pulled it out.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>The instructors' reading of this result: a model knows considerably more than a single answer reveals. Asking once samples one path through everything it could have said.</p>
+    <p>Then reasoning models closed the loop. Instead of you generating ten thousand answers and picking, the model was trained to do the searching internally — to explore several lines of reasoning and land on the good one <em>first time</em>. Give it more time to think and the answer improves, on the same steady curve, with no extra size.</p>
+  </div>
+
+  <div class="note">
+    <p class="eyebrow">Why this is called self-improvement</p>
+    <p>Thinking longer produces something valuable as a by-product: enormous quantities of correct, worked-out reasoning on problems where the answer can be checked — maths with known solutions, code with tests. That output becomes training material for the next model. The model's own extra effort turns into the next model's education, and the loop closes.</p>
+  </div>
+
+  <div class="prose">
+    <p>Looking at the reasoning traces these models produce, the same moves keep recurring: state the problem, break it into pieces, try something, check it against feedback such as a test result, correct the error, and back up to a different approach when stuck. Are those behaviours taught or did they emerge? The instructors are honest that nobody is certain — probably some of both.</p>
+  </div>
+</section>
+
+<!-- ============ 7. ACT FOUR ============ -->
+<section id="agents" class="act">
+  <div class="sec-head">
+    <p class="eyebrow">Push four · 2025 onward</p>
+    <h2>Let it act, and check</h2>
+  </div>
+  <div class="prose">
+    <p>The lecture draws the line cleanly. A chatbot receives a question and returns an answer. An <strong>agent</strong> receives a goal, plans how to reach it, does things in some environment, looks at what happened, corrects itself, and decides for itself when the job is finished — or reports that it cannot finish it.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 300" role="img" aria-label="On the left, a straight line from question to answer. On the right, a loop: goal, plan, act, observe, check, then either loop back or stop.">
+      <!-- chatbot -->
+      <g transform="translate(36,60)">
+        <text class="lbl" x="0" y="-16">A CHATBOT</text>
+        <rect class="box" x="0" y="0" width="104" height="40" rx="6"/>
+        <text class="lbl-t" x="52" y="25" text-anchor="middle">question</text>
+        <path class="arrow" d="M110,20 H160" marker-end="url(#ar2)"/>
+        <rect class="box" x="164" y="0" width="104" height="40" rx="6"/>
+        <text class="lbl-t" x="216" y="25" text-anchor="middle">answer</text>
+        <text class="lbl" x="0" y="76">one step, then it is over</text>
+      </g>
+
+      <line class="axis" x1="360" y1="30" x2="360" y2="262"/>
+
+      <!-- agent loop -->
+      <g transform="translate(430,44)">
+        <text class="lbl" x="0" y="-16" style="fill:var(--c-agent)">AN AGENT</text>
+        <!-- nodes around a loop -->
+        <rect class="box" x="112" y="0" width="110" height="38" rx="6" style="stroke:var(--c-agent)"/>
+        <text class="lbl-t" x="167" y="24" text-anchor="middle">plan a step</text>
+
+        <rect class="box" x="250" y="76" width="110" height="38" rx="6" style="stroke:var(--c-agent)"/>
+        <text class="lbl-t" x="305" y="100" text-anchor="middle">do it</text>
+
+        <rect class="box" x="112" y="152" width="110" height="38" rx="6" style="stroke:var(--c-agent)"/>
+        <text class="lbl-t" x="167" y="176" text-anchor="middle">see result</text>
+
+        <rect class="box" x="-26" y="76" width="110" height="38" rx="6" style="stroke:var(--c-agent)"/>
+        <text class="lbl-t" x="29" y="100" text-anchor="middle">check</text>
+
+        <!-- arrows clockwise -->
+        <path class="arrow" d="M222,22 C258,26 276,48 292,72" marker-end="url(#ar2)" style="stroke:var(--c-agent)"/>
+        <path class="arrow" d="M292,118 C276,142 258,164 226,170" marker-end="url(#ar2)" style="stroke:var(--c-agent)"/>
+        <path class="arrow" d="M112,170 C80,164 62,142 46,120" marker-end="url(#ar2)" style="stroke:var(--c-agent)"/>
+        <path class="arrow" d="M46,72 C62,48 80,26 110,20" marker-end="url(#ar2)" style="stroke:var(--c-agent)"/>
+
+        <text class="lbl" x="167" y="100" text-anchor="middle">goal</text>
+        <text class="lbl" x="167" y="118" text-anchor="middle" style="fill:var(--ink-dim)">held throughout</text>
+
+        <path class="arrow" d="M84,95 H-64" marker-end="url(#ar2)"/>
+        <text class="lbl-b" x="-70" y="92" text-anchor="end">done, or</text>
+        <text class="lbl-b" x="-70" y="108" text-anchor="end">cannot be done</text>
+      </g>
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#64728E"/>
+        </marker>
+      </defs>
+    </svg>
+    <figcaption>Four things separate an agent from a chatbot: a goal it keeps hold of, an environment it can affect, feedback it uses to correct itself, and its own decision about when to stop.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>A useful corrective follows. Most systems sold as agents are not open-ended loops at all — they are hand-drawn flowcharts assembled from a small vocabulary of parts: calls to a model, tools, searches, verifiers, and judges. The common arrangements are worth knowing by name.</p>
+  </div>
+
+  <div class="wide">
+    <div class="grid2">
+      <div class="card"><h3>Chaining</h3><p>Output of one step becomes the input of the next, in a fixed order.</p></div>
+      <div class="card"><h3>Routing</h3><p>Something looks at the request and sends easy ones to a cheap model, hard ones to an expensive one.</p></div>
+      <div class="card"><h3>Split and gather</h3><p>Many workers run at the same time, then one merges the results. This is how deep-research tools work.</p></div>
+      <div class="card"><h3>Manager and workers</h3><p>A central model plans the job, hands out pieces, and assembles what comes back.</p></div>
+    </div>
+  </div>
+
+  <div class="prose" style="margin-top:2rem">
+    <p>The sharpest working example is the coding agent, which reaches the computer through the terminal: move around the repository, search files, read lines, edit them, run a command, read what it printed, decide the next edit. The instructors are candid about timing — this loop was not reliable a year ago and is only now becoming so. What changed was not the idea but stronger models trained with rewards that could actually be checked.</p>
+    <p>The jobs where it lands hardest are the repetitive ones: migrating code between versions, restructuring, moving data between warehouses, writing tests. Also customer support, and long research write-ups. At the speculative edge sit research agents that suggest experiments and draft papers — and the instructors make a genuinely interesting defence of a model's tendency to invent things, since having read the entire web it will propose directions a specialist would never consider.</p>
+  </div>
+</section>
+
+<!-- ============ 8. THE BOTTLENECK ============ -->
+<section id="verify" class="act">
+  <div class="sec-head">
+    <p class="eyebrow">The limit already in view</p>
+    <h2>Checking is harder than guessing</h2>
+  </div>
+  <div class="prose">
+    <p>The most valuable part of the hour comes from a student question. If a model can produce endless plausible attempts, what stops the self-improvement loop from running forever? The answer: knowing which attempts were any good.</p>
+    <p>Generating is cheap. Verifying is not. Where a machine can check the work — a maths problem with a known answer, code with a test suite, a rule that either holds or does not — the loop spins and compounds. Where the only real judge is a person, as in creative writing, the loop stalls at the speed of human attention. This is the <strong>generator–verifier gap</strong>, and the course gives an entire lecture to it.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 920 300" role="img" aria-label="A loop of four stages where the verify stage is drawn as a narrow neck, above a spectrum running from cheap automatic checking to expensive human judgement.">
+      <g transform="translate(60,20)">
+        <text class="lbl" x="0" y="0">THE SELF-IMPROVEMENT LOOP</text>
+        <rect class="box" x="0" y="18" width="130" height="40" rx="6"/>
+        <text class="lbl-t" x="65" y="43" text-anchor="middle">generate a lot</text>
+        <path class="arrow" d="M136,38 H196" marker-end="url(#ar3)"/>
+
+        <!-- narrow neck -->
+        <path d="M200,20 L316,20 L286,38 L316,56 L200,56 Z" fill="var(--surface-2)" stroke="#8FA3C4" stroke-width="1.5"/>
+        <text class="lbl-t" x="250" y="43" text-anchor="middle" fill="#fff">check it</text>
+        <path class="arrow" d="M322,38 H382" marker-end="url(#ar3)"/>
+
+        <rect class="box" x="386" y="18" width="150" height="40" rx="6"/>
+        <text class="lbl-t" x="461" y="43" text-anchor="middle">keep what passed</text>
+        <path class="arrow" d="M542,38 H602" marker-end="url(#ar3)"/>
+
+        <rect class="box" x="606" y="18" width="150" height="40" rx="6"/>
+        <text class="lbl-t" x="681" y="43" text-anchor="middle">train on it</text>
+
+        <path class="arrow" d="M756,38 C790,38 790,92 681,92 L65,92 C-6,92 -6,58 -6,48" marker-end="url(#ar3)" style="stroke-dasharray:4 5"/>
+        <text class="lbl" x="380" y="110" text-anchor="middle">the next model starts from here</text>
+
+        <text class="lbl-b" x="250" y="-2" text-anchor="middle" style="fill:#8FA3C4">the narrow part</text>
+      </g>
+
+      <!-- spectrum -->
+      <g transform="translate(60,180)">
+        <text class="lbl" x="0" y="0">HOW EASILY CAN THE WORK BE CHECKED?</text>
+        <defs>
+          <linearGradient id="spec" x1="0" x2="1">
+            <stop offset="0" stop-color="#5FD3C4"/>
+            <stop offset="1" stop-color="#EE6A8C"/>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="16" width="800" height="10" rx="5" fill="url(#spec)" opacity=".85"/>
+        <line class="tick" x1="0" y1="12" x2="0" y2="34"/>
+        <line class="tick" x1="200" y1="12" x2="200" y2="34"/>
+        <line class="tick" x1="420" y1="12" x2="420" y2="34"/>
+        <line class="tick" x1="640" y1="12" x2="640" y2="34"/>
+        <line class="tick" x1="800" y1="12" x2="800" y2="34"/>
+        <text class="lbl-b" x="0" y="52">unit tests</text>
+        <text class="lbl-b" x="200" y="52" text-anchor="middle">maths answers</text>
+        <text class="lbl-b" x="420" y="52" text-anchor="middle">summaries</text>
+        <text class="lbl-b" x="640" y="52" text-anchor="middle">strategy advice</text>
+        <text class="lbl-b" x="800" y="52" text-anchor="end">a good novel</text>
+        <text class="lbl" x="0" y="74">free, instant, certain</text>
+        <text class="lbl" x="800" y="74" text-anchor="end">slow, costly, contested</text>
+      </g>
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#64728E"/>
+        </marker>
+      </defs>
+    </svg>
+    <figcaption>How far the loop can run in a field is set almost entirely by where that field sits on the lower bar.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>Two further admissions are worth recording, because both are the kind of thing that usually gets smoothed over. Models appear to learn better from their own attempts than from the attempts of a stronger model. And on whether recent gains come from the reinforcement learning or from richer training data underneath it, the instructors say plainly that there is no consensus yet — both are doing work.</p>
+  </div>
+</section>
+
+<!-- ============ 9. WHAT THE COURSE DOES NEXT ============ -->
+<section id="course">
+  <div class="sec-head">
+    <p class="eyebrow">If you keep watching</p>
+    <h2>Where the rest of it goes</h2>
+  </div>
+  <div class="prose">
+    <p>Each theme above becomes its own session, generally built around three or four recent papers rather than a textbook. The shape of the term:</p>
+  </div>
+  <div class="prose">
+    <ul class="road">
+      <li><b>02–03</b><span>Test-time compute in detail, then robust verification — the bottleneck, straight after the idea that creates it.</span></li>
+      <li><b>04–05</b><span>Learning from tool and code feedback; multi-step reasoning and planning.</span></li>
+      <li><b>06–08</b><span>Scaling reinforcement learning at training time, self-improving systems that evolve their own designs, and search-driven research agents.</span></li>
+      <li><b>13–14</b><span>Agents for software engineering, and giving agents memory.</span></li>
+      <li><b>17</b><span>Evaluating agents on long-horizon tasks, which is its own unsolved problem.</span></li>
+      <li><b>Guests</b><span>Speakers from Google DeepMind, Reflection AI and Physical Intelligence on post-training, mathematical reasoning, autonomy and robotics.</span></li>
+    </ul>
+  </div>
+  <div class="prose" style="margin-top:1.8rem">
+    <p>Marks are split roughly half homework, half project. Teams of two to four do original research with API credits provided; a new benchmark, a reliability study of an agent system, or a serious attempt to beat an existing benchmark all count. A survey paper or a wrapper app does not. Auditing is not permitted, but lectures are posted publicly — which is why you can watch this one.</p>
+  </div>
+</section>
+
+<!-- ============ 10. TAKEAWAYS ============ -->
+<section id="takeaways">
+  <div class="sec-head">
+    <p class="eyebrow">Worth remembering</p>
+    <h2>Six things to carry out</h2>
+  </div>
+  <div class="prose">
+    <ol class="takeaways">
+      <li>Scale bought two different goods: a predictable drop in error, and unpredictable new abilities that only switch on above a size threshold.</li>
+      <li>ChatGPT's advantage over what came before was the post-training stack, not raw size — good writing, worked instructions, then human preferences turned into a scoring model.</li>
+      <li>Thinking time is a separate lever from model size. Enough attempts plus a way to check them can lift a small model above a much larger one.</li>
+      <li>Self-improvement is that loop closed: checkable problems generate their own high-quality training material for the next model.</li>
+      <li>An agent is a chatbot plus a goal it keeps, an environment it can change, feedback it acts on, and a stopping decision of its own. Most shipped agents are still hand-drawn flowcharts.</li>
+      <li>Verification, not generation, sets the ceiling. Fields where a machine can mark the work compound; fields where only a person can judge do not.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 11. GLOSSARY ============ -->
+<section id="glossary">
+  <div class="sec-head">
+    <p class="eyebrow">The five words</p>
+    <h2>Plain definitions</h2>
+  </div>
+  <div class="prose">
+    <dl class="gloss">
+      <dt>Scaling law</dt><dd>The observed rule that error falls along a smooth, predictable curve as you add training text, computing power, or model size.</dd>
+      <dt>Post-training</dt><dd>Everything done to a model after it has read the internet, to make it follow instructions and behave the way you want.</dd>
+      <dt>Test-time compute</dt><dd>Effort spent at the moment of answering — more attempts, longer reasoning — rather than during training.</dd>
+      <dt>Verifier</dt><dd>Anything that can say whether an answer is right: a test suite, a known solution, a rule, or a person.</dd>
+      <dt>Agent</dt><dd>A system given a goal that plans, acts on its environment, reacts to what happens, and decides when it is finished.</dd>
+    </dl>
+  </div>
+</section>
+
+<footer>
+  <div class="prose">
+    <p class="eyebrow">Sources</p>
+    <p><strong>Lecture:</strong> Stanford CS329A, Self-Improving AI Agents — Part 1, Course Overview, with Aakanksha Chowdhery and Azalia Mirhoseini. <a href="https://www.youtube.com/watch?v=6YnLB0XbTnI">youtube.com/watch?v=6YnLB0XbTnI</a></p>
+    <p><strong>Course:</strong> Schedule, readings, grading and policies at <a href="https://cs329a.stanford.edu/">cs329a.stanford.edu</a>.</p>
+    <p style="color:var(--ink-faint);margin-top:1.6rem">This page is an independent summary written for readers new to the material. All figures are schematic illustrations of the ideas, redrawn rather than reproduced, and the wording is paraphrase throughout. For the numbers, the papers, and the instructors' own framing, watch the lecture.</p>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>
