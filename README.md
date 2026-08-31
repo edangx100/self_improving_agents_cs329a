@@ -6,3 +6,4 @@ notes for CS329A Self-Improving AI agents lectures
 
 
 Part 1 | Course Overview: https://edangx100.github.io/self_improving_agents_cs329a/1_overview.html
+Part 2 | Test Time Compute Scaling: https://edangx100.github.io/self_improving_agents_cs329a/2_testtime_compute_scale.html
