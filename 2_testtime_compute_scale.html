@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test-Time Compute Scaling — Stanford CS329A, Lesson 2</title>
+<style>
+  :root{
+    --fs: 19px;
+    --measure: 34rem;
+    --lh: 1.75;
+    --bg:#eef1ef; --surface:#f8faf8; --ink:#243036; --ink-soft:#5a6b71;
+    --ink-faint:#8b999e; --rule:#d5ddda; --accent:#3d6f70; --accent-2:#666ca0;
+    --wash: rgba(61,111,112,.09);
+  }
+  html[data-theme="dusk"]{
+    --bg:#f1e8db; --surface:#f8f1e7; --ink:#3a322a; --ink-soft:#6b6053;
+    --ink-faint:#9c917f; --rule:#e1d5c4; --accent:#6f6242; --accent-2:#8a5f52;
+    --wash: rgba(111,98,66,.10);
+  }
+  html[data-theme="night"]{
+    --bg:#161b1e; --surface:#1d2327; --ink:#ccd5d6; --ink-soft:#95a3a5;
+    --ink-faint:#6c7a7d; --rule:#2c3438; --accent:#7bb2ac; --accent-2:#9ba2cf;
+    --wash: rgba(123,178,172,.12);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Charter,Georgia,serif;
+    font-size:var(--fs); line-height:var(--lh);
+    -webkit-font-smoothing:antialiased;
+  }
+  body.roomy{ --lh:2.0; letter-spacing:.008em }
+
+  h1,h2,h3,.sans{
+    font-family:"Avenir Next","Segoe UI",Inter,system-ui,-apple-system,sans-serif;
+    font-weight:600; letter-spacing:-.012em;
+  }
+
+  .wrap{ max-width:var(--measure); margin:0 auto; padding:0 1.4rem }
+
+  /* ---------- masthead ---------- */
+  .masthead{ padding:6.5rem 0 2.5rem }
+  .kicker{ font-family:inherit; font-size:.72rem; color:var(--ink-faint); margin:0 0 1.6rem;
+           line-height:1.6; font-style:italic }
+  h1{ font-size:2.35rem; line-height:1.14; margin:0 0 1.1rem }
+  .standfirst{ font-size:1.06rem; line-height:1.5; margin:0 0 2rem; color:var(--ink);
+               border-left:3px solid var(--accent); padding-left:1rem }
+  .byline{ font-size:.78rem; color:var(--ink-faint); line-height:1.7; margin:0 }
+  .byline a{ color:var(--ink-soft) }
+
+  /* ---------- reading path ---------- */
+  .path{ margin:3rem 0 1rem; padding:1.6rem 1.6rem .6rem; background:var(--surface);
+         border:1px solid var(--rule); border-radius:3px }
+  .path h2{ font-size:.85rem; margin:0 0 1rem; color:var(--ink-soft); font-weight:600 }
+  .path ol{ margin:0; padding:0; list-style:none; counter-reset:p }
+  .path li{ counter-increment:p; margin:0 0 .9rem; font-size:.86rem; line-height:1.5;
+            display:flex; gap:.85rem }
+  .path li::before{ content:counter(p); font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+                    color:var(--ink-faint); font-size:.72rem; padding-top:.28rem; min-width:.9rem }
+  .path a{ color:var(--ink); text-decoration:none; border-bottom:1px solid var(--rule) }
+  .path a:hover{ border-bottom-color:var(--accent) }
+  .path span{ color:var(--ink-soft) }
+
+  /* ---------- body ---------- */
+  article{ counter-reset:sec }
+  section{ padding:3.6rem 0 0; position:relative }
+  section > h2{ font-size:1.3rem; line-height:1.3; margin:0 0 1.2rem; position:relative }
+  section.step > h2::before{
+    counter-increment:sec; content:counter(sec);
+    font-size:.72rem; color:var(--ink-faint); font-weight:500;
+    display:block; margin-bottom:.5rem;
+  }
+  @media (min-width:1080px){
+    section.step > h2::before{ position:absolute; left:-3.2rem; top:.42rem; margin:0 }
+  }
+  p{ margin:0 0 1.35rem; hyphens:auto }
+  h3{ font-size:1rem; margin:2.4rem 0 .8rem }
+  a{ color:var(--accent) }
+  a:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:3px }
+  strong{ font-weight:600 }
+  em.term{ font-style:normal; background:var(--wash); padding:.06em .3em; border-radius:2px }
+
+  ul.plain{ margin:0 0 1.35rem; padding-left:1.15rem }
+  ul.plain li{ margin-bottom:.65rem }
+
+  blockquote{ margin:2rem 0; padding:0 0 0 1.1rem; border-left:2px solid var(--accent);
+              font-size:1rem; color:var(--ink-soft); font-style:italic }
+
+  .aside{ background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:1.3rem 1.4rem; margin:2rem 0; font-size:.9rem; line-height:1.65 }
+  .aside p:last-child{ margin-bottom:0 }
+  .aside h3{ margin:0 0 .6rem; font-size:.85rem; color:var(--ink-soft) }
+
+  /* ---------- figures ---------- */
+  figure{ margin:2.6rem 0; }
+  @media (min-width:900px){ figure{ margin-left:-3rem; margin-right:-3rem } }
+  figure svg{ width:100%; height:auto; display:block }
+  figcaption{ font-size:.8rem; line-height:1.55; color:var(--ink-soft); margin-top:.9rem;
+              padding-left:.1rem }
+  @media (min-width:900px){ figcaption{ padding:0 3rem } }
+  svg text{ font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; fill:var(--ink-soft) }
+  .s-ink{ stroke:var(--ink-soft) } .s-rule{ stroke:var(--rule) }
+  .s-acc{ stroke:var(--accent) } .s-acc2{ stroke:var(--accent-2) }
+  .f-surf{ fill:var(--surface) } .f-acc{ fill:var(--accent) } .f-acc2{ fill:var(--accent-2) }
+  .f-wash{ fill:var(--wash) } .f-none{ fill:none } .f-ink{ fill:var(--ink) }
+  .t-sm{ font-size:12px } .t-xs{ font-size:10.5px } .t-md{ font-size:13.5px; fill:var(--ink) }
+  .t-bold{ font-weight:600 }
+
+  /* ---------- tables ---------- */
+  table{ border-collapse:collapse; width:100%; font-size:.85rem; margin:1.8rem 0 }
+  th,td{ text-align:left; padding:.7rem .6rem; border-bottom:1px solid var(--rule);
+         vertical-align:top; line-height:1.5 }
+  th{ font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; font-weight:600;
+      font-size:.78rem; color:var(--ink-soft) }
+
+  /* ---------- glossary ---------- */
+  dl{ margin:1.6rem 0 }
+  dt{ font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; font-size:.86rem;
+      font-weight:600; margin-top:1.3rem }
+  dd{ margin:.3rem 0 0; font-size:.9rem; color:var(--ink-soft); line-height:1.6 }
+
+  /* ---------- readings ---------- */
+  .reading{ padding:1.2rem 0; border-bottom:1px solid var(--rule) }
+  .reading:first-of-type{ border-top:1px solid var(--rule) }
+  .reading a{ font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; font-size:.92rem;
+              font-weight:600; text-decoration:none; color:var(--ink) }
+  .reading a:hover{ color:var(--accent) }
+  .reading p{ margin:.35rem 0 0; font-size:.85rem; color:var(--ink-soft); line-height:1.55 }
+
+  footer{ margin-top:5rem; padding:2.5rem 0 7rem; border-top:1px solid var(--rule);
+          font-size:.8rem; color:var(--ink-faint); line-height:1.7 }
+  footer a{ color:var(--ink-soft) }
+
+  /* ---------- comfort controls ---------- */
+  .controls{
+    position:fixed; right:1rem; bottom:1rem; z-index:20;
+    background:var(--surface); border:1px solid var(--rule); border-radius:4px;
+    padding:.55rem; display:flex; gap:.55rem; align-items:center;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);
+  }
+  .grp{ display:flex; gap:2px }
+  .controls button{
+    font-family:"Avenir Next","Segoe UI",system-ui,sans-serif; font-size:.72rem;
+    background:transparent; color:var(--ink-soft); border:1px solid transparent;
+    border-radius:3px; padding:.3rem .5rem; cursor:pointer; line-height:1.2;
+  }
+  .controls button:hover{ color:var(--ink) }
+  .controls button[aria-pressed="true"]{ background:var(--wash); color:var(--ink);
+    border-color:var(--rule) }
+  .sep{ width:1px; align-self:stretch; background:var(--rule) }
+  @media (max-width:560px){
+    .controls{ left:.6rem; right:.6rem; bottom:.6rem; justify-content:center }
+  }
+  @media (prefers-reduced-motion:no-preference){
+    html{ scroll-behavior:smooth }
+  }
+  .skip{ position:absolute; left:-9999px }
+  .skip:focus{ left:1rem; top:1rem; position:fixed; background:var(--surface);
+               padding:.6rem 1rem; border:1px solid var(--rule); z-index:30 }
+</style>
+</head>
+<body>
+<a class="skip" href="#start">Skip to the lesson</a>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">Lesson 2 of Stanford CS329A, Self-Improving AI Agents, Autumn 2025</p>
+    <h1>Test-time compute scaling</h1>
+    <p class="standfirst">A model gets better at a hard question when you let it try more than once — and past
+      a certain point, buying more attempts beats buying a bigger model.</p>
+    <p class="byline">Taught by Aakanksha Chowdhery and Azalia Mirhoseini.
+      <a href="https://www.youtube.com/watch?v=-Ggc37xLj_Y&amp;list=PLangBM27OtEA&amp;index=2">Lecture video</a> ·
+      <a href="https://cs329a.stanford.edu/">Course page</a></p>
+  </header>
+
+  <nav class="path" aria-label="Reading order">
+    <h2>Read in this order</h2>
+    <ol>
+      <li><a href="#start">Where the compute goes</a> <span>— the one idea everything else hangs on</span></li>
+      <li><a href="#sampling">Just try again</a> <span>— what happens when you sample 250 times</span></li>
+      <li><a href="#gap">Finding the good one</a> <span>— why coverage is not the same as accuracy</span></li>
+      <li><a href="#shapes">Wide or deep</a> <span>— parallel attempts versus successive revisions</span></li>
+      <li><a href="#optimal">Spend by difficulty</a> <span>— the compute-optimal result</span></li>
+      <li><a href="#trade">Thinking instead of training</a> <span>— when inference beats a 14× bigger model</span></li>
+      <li><a href="#archon">Searching the design space</a> <span>— Archon, and treating architecture as a knob</span></li>
+      <li><a href="#powerlaws">Why the curve is a power law</a> <span>— and how to predict it cheaply</span></li>
+      <li><a href="#takeaways">What to do with this</a> <span>— practical rules, open problems, definitions</span></li>
+    </ol>
+  </nav>
+
+  <article>
+
+  <!-- ============ 1 ============ -->
+  <section class="step" id="start">
+    <h2>Where the compute goes</h2>
+
+    <p>Building a language model costs an enormous amount of computation, and almost all of it is
+      spent before anyone asks a question. Once the model exists, the usual habit is to ask it
+      something, take the first answer it gives, and stop. That single answer is a remarkably small
+      amount of work compared to what went into making the model.</p>
+
+    <p>This lesson is about the other place computation can go: the moment of use. Instead of asking
+      once, ask ten times, or two hundred and fifty times. Or ask once, then hand the answer back and
+      say "check this and fix it." Or generate many answers and have the model judge between them.
+      All of these cost more per question, and all of them make the model measurably better without
+      changing a single weight.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 250" role="img" aria-labelledby="f1t f1d">
+        <title id="f1t">Two places to spend compute</title>
+        <desc id="f1d">A large one-time training cost on the left produces a model. On the right,
+          the same model answers a question once, or many times with a step that picks among the
+          answers.</desc>
+        <rect x="8" y="26" width="176" height="196" rx="3" class="f-wash"/>
+        <text x="18" y="18" class="t-sm t-bold">Paid once, before use</text>
+        <rect x="30" y="52" width="132" height="112" rx="2" class="f-surf s-ink" stroke-width="1"/>
+        <text x="96" y="100" class="t-sm" text-anchor="middle">pretraining</text>
+        <text x="96" y="120" class="t-sm" text-anchor="middle">and post-training</text>
+        <path d="M96 172 L96 196" class="s-ink f-none" stroke-width="1"/>
+        <path d="M92 190 L96 198 L100 190" class="s-ink f-none" stroke-width="1"/>
+        <text x="96" y="214" class="t-md" text-anchor="middle">the model</text>
+
+        <text x="228" y="18" class="t-sm t-bold">Paid again for every question</text>
+        <rect x="218" y="26" width="434" height="196" rx="3" class="f-none s-rule" stroke-width="1"/>
+
+        <circle cx="252" cy="80" r="5" class="f-ink"/>
+        <text x="252" y="62" class="t-xs" text-anchor="middle">question</text>
+        <path d="M262 80 L360 80" class="s-ink f-none" stroke-width="1"/>
+        <rect x="360" y="68" width="70" height="24" rx="2" class="f-surf s-ink" stroke-width="1"/>
+        <text x="395" y="84" class="t-xs" text-anchor="middle">1 attempt</text>
+        <path d="M432 80 L488 80" class="s-rule f-none" stroke-width="1"/>
+        <circle cx="496" cy="80" r="4" class="f-acc"/>
+        <text x="512" y="84" class="t-sm">answer</text>
+
+        <circle cx="252" cy="164" r="5" class="f-ink"/>
+        <text x="252" y="146" class="t-xs" text-anchor="middle">question</text>
+        <path d="M262 164 C300 164 320 128 356 128" class="s-acc f-none" stroke-width="1"/>
+        <path d="M262 164 C300 164 320 146 356 146" class="s-acc f-none" stroke-width="1"/>
+        <path d="M262 164 L356 164" class="s-acc f-none" stroke-width="1"/>
+        <path d="M262 164 C300 164 320 182 356 182" class="s-acc f-none" stroke-width="1"/>
+        <path d="M262 164 C300 164 320 200 356 200" class="s-acc f-none" stroke-width="1"/>
+        <text x="378" y="122" class="t-xs">many attempts</text>
+        <rect x="440" y="140" width="52" height="48" rx="2" class="f-surf s-acc" stroke-width="1"/>
+        <path d="M358 128 L440 156 M358 146 L440 160 M358 164 L440 164 M358 182 L440 170 M358 200 L440 174"
+              class="s-rule f-none" stroke-width="1"/>
+        <text x="466" y="168" class="t-xs" text-anchor="middle">pick</text>
+        <path d="M494 164 L528 164" class="s-rule f-none" stroke-width="1"/>
+        <circle cx="536" cy="164" r="4" class="f-acc"/>
+        <text x="552" y="168" class="t-sm">answer</text>
+      </svg>
+      <figcaption>Training compute is a fixed cost you pay before anyone shows up. Test-time compute
+        is a variable cost you can dial up or down for each question — which means it can be spent
+        where it actually helps.</figcaption>
+    </figure>
+
+    <p>The reason this matters for a course on self-improving agents is that an agent which can spend
+      more effort on a hard problem, notice its own mistakes, and try again is doing the most basic
+      version of improving itself. Everything later in the course — verifiers, search, reinforcement
+      learning on its own attempts — is built on the machinery introduced here.</p>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section class="step" id="sampling">
+    <h2>Just try again</h2>
+
+    <p>The simplest possible way to spend more compute at test time is to run the model repeatedly on
+      the same prompt and collect the answers. Because sampling is random, the attempts differ. The
+      question is how much you gain.</p>
+
+    <p>The measure to watch is <em class="term">coverage</em>: the fraction of problems where at least
+      one of your attempts is correct. It is also written pass@k, where k is the number of attempts.
+      Coverage is not the same thing as accuracy — it assumes you can somehow tell which attempt is
+      the good one, an assumption we come back to in a moment.</p>
+
+    <p>Brown and colleagues measured this across models and benchmarks, and the pattern was
+      consistent: coverage keeps climbing as you add samples, across four orders of
+      magnitude. Their headline case is a software engineering benchmark.
+      DeepSeek-Coder-V2-Instruct solves 15.9% of SWE-bench Lite issues with one sample and
+      56% with 250 samples, beating the single-sample state of the art of 43% — which was held at
+      the time by considerably stronger frontier models.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 330" role="img" aria-labelledby="f2t f2d">
+        <title id="f2t">Coverage against number of samples on SWE-bench Lite</title>
+        <desc id="f2d">On a logarithmic sample axis, the share of issues solved by at least one
+          attempt rises roughly in a straight line from about 16 percent at one sample to 56 percent
+          at 250 samples, crossing the 43 percent single-attempt state of the art near 60
+          samples.</desc>
+        <line x1="78" y1="278" x2="620" y2="278" class="s-ink" stroke-width="1"/>
+        <line x1="78" y1="40" x2="78" y2="278" class="s-ink" stroke-width="1"/>
+
+        <g class="t-xs">
+          <text x="78" y="298" text-anchor="middle">1</text>
+          <text x="304" y="298" text-anchor="middle">10</text>
+          <text x="530" y="298" text-anchor="middle">100</text>
+          <text x="620" y="298" text-anchor="middle">250</text>
+          <text x="349" y="318" text-anchor="middle">samples drawn per problem (log scale)</text>
+          <text x="68" y="282" text-anchor="end">0%</text>
+          <text x="68" y="203" text-anchor="end">20%</text>
+          <text x="68" y="124" text-anchor="end">40%</text>
+          <text x="68" y="48" text-anchor="end">60%</text>
+        </g>
+
+        <line x1="78" y1="113" x2="620" y2="113" class="s-ink f-none" stroke-width="1"
+              stroke-dasharray="3 4" opacity=".55"/>
+        <text x="86" y="105" class="t-xs">43% — best single-attempt result at the time</text>
+
+        <path d="M78 218 L304 154 L530 89 L620 62" class="s-acc f-none" stroke-width="2"
+              stroke-linejoin="round"/>
+        <circle cx="78" cy="218" r="4" class="f-acc"/>
+        <circle cx="620" cy="62" r="4" class="f-acc"/>
+        <text x="92" y="235" class="t-sm">15.9% with one try</text>
+        <text x="612" y="47" class="t-sm t-bold" text-anchor="end" fill="var(--accent)">56% with 250 tries</text>
+
+        <text x="330" y="200" class="t-sm">solved by at least one attempt</text>
+        <path d="M330 190 L330 168" class="s-acc f-none" stroke-width="1" opacity=".6"/>
+      </svg>
+      <figcaption>Straight on a log axis means each multiplication of the sample budget buys about
+        the same number of extra points. The dashed line is what a stronger model achieved in one
+        shot; the weaker model overtakes it somewhere around sixty attempts.</figcaption>
+    </figure>
+
+    <p>The relationship is often close to log-linear and is well described by an exponentiated power
+      law, which is what makes people call it an <em class="term">inference-time scaling law</em>.
+      It behaves like a scaling law: predictable, smooth, and extendable over a wide range.</p>
+
+    <p>It also changes the arithmetic of cost. Holding the surrounding agent framework fixed,
+      sampling the cheaper DeepSeek model five times solved more issues than a single
+      sample from Claude 3.5 Sonnet or GPT-4o, at more than three times lower cost. And under a
+      fixed FLOP budget the best split differs by task — on MATH, coverage is
+      maximised by a smaller model taking more samples; on CodeContests, by fewer samples from a
+      larger one. Model size and attempt count are two dials on the same budget, and neither
+      one is always the right dial to turn.</p>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section class="step" id="gap">
+    <h2>Finding the good one</h2>
+
+    <p>Here is the catch that shapes the rest of the course. Coverage counts a problem as solved if
+      any attempt was correct. But in a real system, you have to hand back exactly one answer. If you
+      cannot tell which of your 250 attempts is the right one, high coverage buys you nothing.</p>
+
+    <p>In some domains this is free. Code can be run against tests. A formal proof can be checked by a
+      proof assistant. Wherever answers verify automatically, coverage converts directly into
+      performance, and the SWE-bench result above is real performance, not a hypothetical ceiling.</p>
+
+    <p>Elsewhere it is the hard part. On tasks without an automatic checker, the standard selection
+      methods — taking the majority answer, or scoring candidates with a learned reward model —
+      plateau beyond several hundred samples and stop tracking the sample budget.
+      You keep paying for attempts, and coverage keeps rising, and the answer you actually return
+      stops improving.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 260" role="img" aria-labelledby="f3t f3d">
+        <title id="f3t">The generation–verification gap</title>
+        <desc id="f3d">Schematic. One curve, labelled solved by some attempt, keeps rising with the
+          sample budget. A second curve, labelled returned by the picker, flattens out, and the
+          widening space between them is labelled the gap.</desc>
+        <line x1="70" y1="212" x2="620" y2="212" class="s-ink" stroke-width="1"/>
+        <line x1="70" y1="30" x2="70" y2="212" class="s-ink" stroke-width="1"/>
+        <text x="345" y="240" class="t-xs" text-anchor="middle">more samples</text>
+        <text x="58" y="120" class="t-xs" text-anchor="middle" transform="rotate(-90 58 120)">problems solved</text>
+
+        <path d="M70 190 C200 150 340 96 620 52" class="s-acc f-none" stroke-width="2"/>
+        <path d="M70 190 C170 168 260 154 620 142" class="s-acc2 f-none" stroke-width="2"
+              stroke-dasharray="5 4"/>
+        <path d="M620 52 L620 142" class="s-ink f-none" stroke-width="1" opacity=".45"/>
+        <text x="608" y="102" class="t-sm" text-anchor="end">the gap</text>
+
+        <text x="418" y="60" class="t-sm" fill="var(--accent)">correct somewhere in the pile</text>
+        <text x="418" y="164" class="t-sm" fill="var(--accent-2)">what the picker returns</text>
+      </svg>
+      <figcaption>Schematic, not measured data. Generation scales; selection does not, at least not
+        with majority voting or an off-the-shelf reward model. Closing this gap is the subject of the
+        next lesson.</figcaption>
+    </figure>
+
+    <div class="aside">
+      <h3>Why this is the pivot of the whole course</h3>
+      <p>Once you accept that generating good candidates is easy and recognising them is hard, a lot
+        of research directions fall out of it: better verifiers, process-level scoring that checks
+        each reasoning step rather than the final answer, weak verifiers combined into strong ones,
+        and using verified attempts as training data. Lesson 3 goes straight at it.</p>
+    </div>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section class="step" id="shapes">
+    <h2>Wide or deep</h2>
+
+    <p>Repeated sampling is only one shape that test-time compute can take, and it is the dumbest
+      one: every attempt starts from scratch, knowing nothing about the attempts that failed. Snell
+      and colleagues separate two mechanisms.</p>
+
+    <p><strong>Parallel.</strong> Draw many independent answers and search among them, ideally scored
+      by a <em class="term">process reward model</em> — a verifier that grades each step of the
+      reasoning rather than only the final result, so that search can be steered partway through.</p>
+
+    <p><strong>Sequential.</strong> Let the model see its own previous attempt and revise it. Here the
+      compute is spent going deeper on one line of thinking rather than opening new ones.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 240" role="img" aria-labelledby="f4t f4d">
+        <title id="f4t">Parallel attempts versus sequential revisions</title>
+        <desc id="f4d">On the left, one prompt fans out into five independent answers that are scored
+          and picked from. On the right, one answer is revised four times in a chain, each revision
+          seeing the last.</desc>
+        <text x="20" y="24" class="t-sm t-bold">Wide: independent attempts</text>
+        <circle cx="42" cy="120" r="5" class="f-ink"/>
+        <g class="s-acc f-none" stroke-width="1">
+          <path d="M52 120 C100 120 120 62 168 62"/>
+          <path d="M52 120 C100 120 120 91 168 91"/>
+          <path d="M52 120 L168 120"/>
+          <path d="M52 120 C100 120 120 149 168 149"/>
+          <path d="M52 120 C100 120 120 178 168 178"/>
+        </g>
+        <g class="f-surf s-acc" stroke-width="1">
+          <rect x="168" y="52" width="46" height="20" rx="2"/>
+          <rect x="168" y="81" width="46" height="20" rx="2"/>
+          <rect x="168" y="110" width="46" height="20" rx="2"/>
+          <rect x="168" y="139" width="46" height="20" rx="2"/>
+          <rect x="168" y="168" width="46" height="20" rx="2"/>
+        </g>
+        <path d="M218 62 L262 112 M218 91 L262 116 M218 120 L262 120 M218 149 L262 124 M218 178 L262 128"
+              class="s-rule f-none" stroke-width="1"/>
+        <rect x="262" y="102" width="44" height="36" rx="2" class="f-surf s-ink" stroke-width="1"/>
+        <text x="284" y="124" class="t-xs" text-anchor="middle">score</text>
+        <text x="42" y="212" class="t-xs">no attempt learns from the others</text>
+
+        <line x1="336" y1="14" x2="336" y2="226" class="s-rule" stroke-width="1"/>
+
+        <text x="366" y="24" class="t-sm t-bold">Deep: successive revisions</text>
+        <circle cx="388" cy="120" r="5" class="f-ink"/>
+        <g class="f-surf s-acc2" stroke-width="1">
+          <rect x="410" y="106" width="46" height="28" rx="2"/>
+          <rect x="478" y="106" width="46" height="28" rx="2"/>
+          <rect x="546" y="106" width="46" height="28" rx="2"/>
+        </g>
+        <g class="s-acc2 f-none" stroke-width="1">
+          <path d="M398 120 L410 120"/>
+          <path d="M456 120 L478 120"/><path d="M470 116 L478 120 L470 124"/>
+          <path d="M524 120 L546 120"/><path d="M518 116 L526 120 L518 124"/>
+          <path d="M592 120 L616 120"/>
+        </g>
+        <circle cx="624" cy="120" r="4" class="f-acc2"/>
+        <g class="t-xs" text-anchor="middle">
+          <text x="433" y="124">draft</text>
+          <text x="501" y="124">revise</text>
+          <text x="569" y="124">revise</text>
+        </g>
+        <text x="366" y="212" class="t-xs">each step sees where the last one went wrong</text>
+      </svg>
+      <figcaption>Wide search covers more of the space; deep revision exploits what the model already
+        got partly right. Real systems use a mix, and the right mix is not fixed.</figcaption>
+    </figure>
+
+    <p>The finding is that neither shape wins outright.
+      Easier questions benefit from purely sequential compute, while harder questions do
+      best at some ratio of sequential to parallel, and the ideal ratio depends on both the budget and
+      the question. That makes intuitive sense: if your first attempt is roughly on track,
+      polishing it is efficient. If your first attempt was in the wrong neighbourhood entirely,
+      polishing it just produces a well-edited wrong answer, and you need to start somewhere else.</p>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section class="step" id="optimal">
+    <h2>Spend by difficulty</h2>
+
+    <p>If the best strategy depends on how hard the question is, the natural move is to estimate the
+      difficulty first and then choose. That is the <em class="term">compute-optimal</em> strategy:
+      allocate test-time compute per prompt rather than applying one fixed recipe to everything.</p>
+
+    <p>Difficulty here is estimated by the model's own machinery — binning questions by how a verifier
+      scores early attempts — so no ground-truth labels are needed at test time.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 220" role="img" aria-labelledby="f5t f5d">
+        <title id="f5t">Allocation by estimated difficulty</title>
+        <desc id="f5d">Five difficulty bins from easy to hard, each annotated with the strategy that
+          suits it: revision for easy bins, a growing share of parallel search and verifier-guided
+          search for harder bins.</desc>
+        <text x="20" y="26" class="t-sm t-bold">Estimated difficulty of the question</text>
+        <g>
+          <rect x="20" y="44" width="118" height="40" rx="2" class="f-wash"/>
+          <rect x="146" y="44" width="118" height="40" rx="2" class="f-wash"/>
+          <rect x="272" y="44" width="118" height="40" rx="2" class="f-wash"/>
+          <rect x="398" y="44" width="118" height="40" rx="2" class="f-wash"/>
+          <rect x="524" y="44" width="118" height="40" rx="2" class="f-wash"/>
+        </g>
+        <g class="t-xs" text-anchor="middle">
+          <text x="79" y="69">easiest</text>
+          <text x="205" y="69">easy</text>
+          <text x="331" y="69">middling</text>
+          <text x="457" y="69">hard</text>
+          <text x="583" y="69">hardest</text>
+        </g>
+
+        <text x="20" y="118" class="t-sm t-bold">Where the budget goes</text>
+        <g stroke-width="10" class="f-none">
+          <path d="M25 142 L133 142" class="s-acc2"/>
+          <path d="M151 142 L259 142" class="s-acc2"/>
+          <path d="M277 142 L360 142" class="s-acc2"/>
+          <path d="M360 142 L385 142" class="s-acc"/>
+          <path d="M403 142 L455 142" class="s-acc2"/>
+          <path d="M455 142 L511 142" class="s-acc"/>
+          <path d="M529 142 L562 142" class="s-acc2"/>
+          <path d="M562 142 L637 142" class="s-acc"/>
+        </g>
+        <g class="t-xs">
+          <rect x="20" y="176" width="10" height="10" rx="1" class="f-acc2"/>
+          <text x="38" y="185">sequential revision</text>
+          <rect x="176" y="176" width="10" height="10" rx="1" class="f-acc"/>
+          <text x="194" y="185">parallel attempts, searched against a verifier</text>
+        </g>
+      </svg>
+      <figcaption>Qualitative sketch of the pattern, not measured proportions. As questions get
+        harder, more of the budget shifts from polishing one answer to exploring several.</figcaption>
+    </figure>
+
+    <p>Matching the strategy to the question is worth a lot. Compute-optimal allocation
+      improves the efficiency of test-time scaling by more than four times compared to a best-of-N
+      baseline — the same accuracy for roughly a quarter of the inference cost, purely from
+      deciding where to spend.</p>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section class="step" id="trade">
+    <h2>Thinking instead of training</h2>
+
+    <p>Now the provocative question. Given a fixed number of FLOPs, are you better off pretraining a
+      bigger model, or keeping a small one and letting it think longer?</p>
+
+    <p>The comparison Snell and colleagues run is FLOPs-matched: a small model with extra test-time
+      compute against a model roughly fourteen times larger.
+      On problems where the smaller base model already achieves somewhat non-trivial
+      success rates, test-time compute can outperform the 14× larger model.</p>
+
+    <p>The qualifier is doing real work. If the small model essentially never gets a problem right,
+      extra attempts have nothing to amplify — there is no signal to select from, and no partially
+      correct draft to revise. Capability that is absent cannot be bought back at inference time.</p>
+
+    <blockquote>Test-time compute amplifies what a model can already sometimes do. It does not install
+      abilities the model lacks.</blockquote>
+
+    <p>There is a second qualifier about volume. Pretraining is paid once; inference is paid on every
+      query forever. When the expected number of inference tokens is large relative to the pretraining
+      budget, the arithmetic swings back toward training the bigger model. A research prototype
+      answering a thousand hard questions and a product answering a billion easy ones should make
+      opposite choices.</p>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section class="step" id="archon">
+    <h2>Searching the design space</h2>
+
+    <p>By this point there are a lot of moving parts: how many samples, from which model, ranked how,
+      merged or not, critiqued or not, checked how. These compose, they interact, and nobody knows the
+      best arrangement for a given task. Archon's proposal is to stop guessing.</p>
+
+    <p>It defines an extensible design space covering generation ensembling, repeated
+      sampling, ranking, fusion, critiquing, verification and unit testing, and turns building an LLM
+      system into a hyperparameter optimisation problem. Give it the available models, the
+      available techniques and a compute budget, and a search procedure finds an architecture for
+      your benchmark.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 250" role="img" aria-labelledby="f6t f6d">
+        <title id="f6t">Archon's inference-time layers</title>
+        <desc id="f6d">A pipeline of modules — generators, critic, ranker, fuser, and verifier or
+          unit tests — with a bracket above indicating that the choice and ordering of modules is
+          itself searched.</desc>
+        <path d="M40 40 L40 28 L620 28 L620 40" class="s-rule f-none" stroke-width="1"/>
+        <text x="330" y="20" class="t-sm" text-anchor="middle">which modules, how many, in what order — all searched</text>
+
+        <g class="f-surf s-acc" stroke-width="1">
+          <rect x="30" y="64" width="96" height="112" rx="2"/>
+        </g>
+        <g class="f-surf s-ink" stroke-width="1">
+          <rect x="152" y="96" width="86" height="48" rx="2"/>
+          <rect x="264" y="96" width="86" height="48" rx="2"/>
+          <rect x="376" y="96" width="86" height="48" rx="2"/>
+          <rect x="488" y="96" width="102" height="48" rx="2"/>
+        </g>
+        <g class="t-sm" text-anchor="middle">
+          <text x="78" y="112">generators</text>
+          <text x="195" y="125">critic</text>
+          <text x="307" y="125">ranker</text>
+          <text x="419" y="125">fuser</text>
+          <text x="539" y="118">verifier or</text>
+          <text x="539" y="134">unit tests</text>
+        </g>
+        <text x="78" y="134" class="t-xs" text-anchor="middle">several models,</text>
+        <text x="78" y="150" class="t-xs" text-anchor="middle">sampled repeatedly</text>
+
+        <g class="s-rule f-none" stroke-width="1">
+          <path d="M126 120 L152 120"/><path d="M238 120 L264 120"/>
+          <path d="M350 120 L376 120"/><path d="M462 120 L488 120"/>
+          <path d="M590 120 L616 120"/>
+        </g>
+        <circle cx="624" cy="120" r="4" class="f-acc"/>
+
+        <g class="t-xs" text-anchor="middle">
+          <text x="195" y="204">names the flaws</text>
+          <text x="195" y="220">in each candidate</text>
+          <text x="307" y="204">orders them</text>
+          <text x="307" y="220">best to worst</text>
+          <text x="419" y="204">merges the best</text>
+          <text x="419" y="220">into one answer</text>
+          <text x="539" y="204">checks the result</text>
+          <text x="539" y="220">before it ships</text>
+        </g>
+      </svg>
+      <figcaption>The modules are all ordinary language model calls with different jobs. What Archon
+        contributes is the search over how to wire them together for a given task and budget.</figcaption>
+    </figure>
+
+    <p>The searched architectures are strong: across MT-Bench, Arena-Hard-Auto,
+      AlpacaEval 2.0, MixEval, MixEval-Hard, MATH and CodeContests, they beat frontier models
+      including GPT-4o and Claude 3.5 Sonnet by an average of 15.1 percentage points.</p>
+
+    <p>The failure modes are as instructive as the wins. The framework works well with
+      models of roughly 70B parameters or more; with 7B open models the best configurations fall well
+      behind single larger models — small models can rank, but they critique and fuse badly, and a
+      pipeline of weak judges is worse than one decent answer. On instruction-following
+      benchmarks, extra layers of critics, rankers and fusers stop helping past about thirty inference
+      calls, while math and coding keep improving with more calls when generated unit tests are used
+      to evaluate candidates. The same pattern from earlier repeats: where you can check
+      answers, compute keeps paying.</p>
+  </section>
+
+  <!-- ============ 8 ============ -->
+  <section class="step" id="powerlaws">
+    <h2>Why the curve is a power law</h2>
+
+    <p>Return to the coverage curve. It looks like a power law, and that raises a puzzle worth taking
+      seriously, because the obvious mathematics says it should not.</p>
+
+    <p>Take a single problem the model solves with probability p on any given attempt. If attempts are
+      independent, the chance that k attempts all fail is (1−p) multiplied by itself k times. That
+      decays <em class="term">exponentially</em> — very fast, and much faster than any power law.
+      This prediction holds empirically at the level of individual problems. So
+      where does the slow, straight aggregate line come from?</p>
+
+    <p>The answer is in the mixture. Different problems have wildly different values of p, and
+      when the distribution of single-attempt success probabilities is heavy tailed — a
+      small fraction of problems with extremely low success probabilities — those problems warp the
+      aggregate into a power law even though each individual problem is still decaying
+      exponentially.</p>
+
+    <figure>
+      <svg viewBox="0 0 660 250" role="img" aria-labelledby="f7t f7d">
+        <title id="f7t">Heavy tail of per-problem success rates producing aggregate power law</title>
+        <desc id="f7d">Left, a histogram of per-problem success probability with a long tail of
+          problems near zero. Right, on log axes, individual problems curve steeply downward while
+          the average across problems falls as a straight line.</desc>
+        <text x="20" y="22" class="t-sm t-bold">Per-problem success rate</text>
+        <line x1="30" y1="176" x2="290" y2="176" class="s-ink" stroke-width="1"/>
+        <g class="f-acc" opacity=".75">
+          <rect x="34" y="62" width="14" height="114"/>
+          <rect x="52" y="96" width="14" height="80"/>
+          <rect x="70" y="122" width="14" height="54"/>
+          <rect x="88" y="138" width="14" height="38"/>
+          <rect x="106" y="148" width="14" height="28"/>
+          <rect x="124" y="154" width="14" height="22"/>
+          <rect x="142" y="158" width="14" height="18"/>
+          <rect x="160" y="160" width="14" height="16"/>
+          <rect x="178" y="161" width="14" height="15"/>
+          <rect x="196" y="160" width="14" height="16"/>
+          <rect x="214" y="158" width="14" height="18"/>
+          <rect x="232" y="154" width="14" height="22"/>
+          <rect x="250" y="146" width="14" height="30"/>
+          <rect x="268" y="130" width="14" height="46"/>
+        </g>
+        <g class="t-xs">
+          <text x="34" y="194">almost never</text>
+          <text x="248" y="194">almost always</text>
+          <text x="30" y="216">a long tail of near-impossible problems</text>
+          <text x="30" y="232">is what bends the aggregate curve</text>
+        </g>
+
+        <line x1="342" y1="14" x2="342" y2="240" class="s-rule" stroke-width="1"/>
+
+        <text x="372" y="22" class="t-sm t-bold">Failure rate against attempts (log–log)</text>
+        <line x1="382" y1="176" x2="636" y2="176" class="s-ink" stroke-width="1"/>
+        <line x1="382" y1="44" x2="382" y2="176" class="s-ink" stroke-width="1"/>
+        <path d="M382 50 C400 74 412 150 426 172" class="s-acc2 f-none" stroke-width="1.6"/>
+        <path d="M382 50 C404 82 424 158 442 172" class="s-acc2 f-none" stroke-width="1.6" opacity=".55"/>
+        <path d="M382 50 C412 92 446 162 470 173" class="s-acc2 f-none" stroke-width="1.6" opacity=".35"/>
+        <path d="M382 52 L636 158" class="s-acc f-none" stroke-width="2"/>
+        <text x="452" y="118" class="t-xs" fill="var(--accent-2)">one problem at a time:</text>
+        <text x="452" y="132" class="t-xs" fill="var(--accent-2)">exponential, falls off a cliff</text>
+        <text x="636" y="146" class="t-xs" text-anchor="end" fill="var(--accent)">averaged over problems:</text>
+        <text x="636" y="160" class="t-xs" text-anchor="end" fill="var(--accent)">a straight line</text>
+      </svg>
+      <figcaption>The aggregate curve is not the shape of any single problem's behaviour. It is an
+        artefact of averaging over a population whose difficulties are very unevenly spread.</figcaption>
+    </figure>
+
+    <p>This is not only a curiosity about curve shapes. It has a practical payoff and a warning.</p>
+
+    <p>The payoff: if the aggregate is a mixture, then estimating the distribution of per-problem
+      success rates lets you forecast the whole curve from a modest number of samples.
+      The distributional method predicts the power law exponent with an order of magnitude
+      lower relative error, equivalently using two to four orders of magnitude less inference
+      compute, and it also explains cases where the observed curve deviates from a clean power
+      law. Deciding whether a large sampling run is worth it stops being a gamble.</p>
+
+    <p>The warning: a smooth aggregate curve can hide a population that is splitting in two. Most of
+      your gains may be arriving from problems that were nearly free all along, while the genuinely
+      hard tail stays untouched no matter how much you spend.</p>
+  </section>
+
+  <!-- ============ 9 ============ -->
+  <section class="step" id="takeaways">
+    <h2>What to do with this</h2>
+
+    <p>Compressed into rules you could act on tomorrow:</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:38%">If this is true</th><th>Then</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>You can check answers automatically</td>
+            <td>Sample hard. Coverage becomes accuracy, and the curve keeps going for a long way.</td></tr>
+        <tr><td>You cannot check answers</td>
+            <td>Expect selection to plateau in the low hundreds of samples. Spend your effort on the
+                verifier, not the sample count.</td></tr>
+        <tr><td>The model gets it partly right</td>
+            <td>Revise sequentially. Deep beats wide when the first draft is in the right area.</td></tr>
+        <tr><td>The model is lost</td>
+            <td>Go wide, and accept that some problems are outside what inference compute can rescue.</td></tr>
+        <tr><td>You have a fixed FLOP budget</td>
+            <td>Compare a small model with many attempts against a large model with few. The winner
+                depends on the task, so measure it.</td></tr>
+        <tr><td>You will serve a very high query volume</td>
+            <td>Lean back toward the bigger model. Test-time compute is a recurring bill.</td></tr>
+        <tr><td>You are choosing a pipeline</td>
+            <td>Search the configuration rather than guessing it, and check your component models are
+                strong enough to critique and merge.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What this lesson leaves open</h3>
+    <ul class="plain">
+      <li>Selection is the bottleneck. Everything downstream of the generator is weaker than the
+        generator.</li>
+      <li>Knowing when to stop. Spending 250 samples on a problem the model was never going to solve
+        is pure waste, and current systems are bad at telling.</li>
+      <li>Deciding difficulty without a verifier, since the compute-optimal recipe depends on an
+        estimate that itself needs scoring machinery.</li>
+      <li>Whether attempts can stop being independent — an agent that genuinely learns within a
+        session rather than re-rolling the dice.</li>
+    </ul>
+
+    <h3>Words used here</h3>
+    <dl>
+      <dt>Test-time compute</dt>
+      <dd>Computation spent while answering, as opposed to computation spent building the model.
+        Also called inference-time compute.</dd>
+
+      <dt>Coverage, or pass@k</dt>
+      <dd>The fraction of problems where at least one of k attempts is correct. An upper bound on
+        what a perfect selector could deliver.</dd>
+
+      <dt>Best-of-N</dt>
+      <dd>Generate N answers, score them, return the top one. The standard parallel baseline.</dd>
+
+      <dt>Majority voting</dt>
+      <dd>Return the answer that appears most often across attempts. Needs answers that can be
+        compared for equality, so it suits short final answers, not essays or patches.</dd>
+
+      <dt>Verifier</dt>
+      <dd>Anything that judges whether an answer is correct — a test suite, a proof checker, or a
+        trained reward model. An outcome verifier judges the final answer; a process verifier judges
+        each step.</dd>
+
+      <dt>Revision</dt>
+      <dd>Feeding an attempt back to the model and asking for an improved version. The sequential
+        counterpart to sampling more.</dd>
+
+      <dt>Compute-optimal scaling</dt>
+      <dd>Choosing the test-time strategy and budget per question according to its estimated
+        difficulty, rather than applying one recipe to everything.</dd>
+
+      <dt>Generation–verification gap</dt>
+      <dd>The distance between how well a model can produce a correct answer somewhere in a pile and
+        how well it can identify which one that is.</dd>
+    </dl>
+  </section>
+
+  <!-- ============ readings ============ -->
+  <section id="readings">
+    <h2>The four assigned papers</h2>
+
+    <div class="reading">
+      <a href="https://arxiv.org/abs/2407.21787">Large Language Monkeys: Scaling Inference Compute with Repeated Sampling</a>
+      <p>Brown, Juravsky, Ehrlich, Clark, Le, Ré, Mirhoseini, 2024. The coverage scaling result and
+        the cost argument. Start here.</p>
+    </div>
+
+    <div class="reading">
+      <a href="https://arxiv.org/abs/2408.03314">Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters</a>
+      <p>Snell, Lee, Xu, Kumar, 2024. Search against process verifiers, sequential revision,
+        difficulty-adaptive allocation, and the FLOPs-matched comparison against a 14× larger model.</p>
+    </div>
+
+    <div class="reading">
+      <a href="https://www.arxiv.org/abs/2409.15254">Archon: An Architecture Search Framework for Inference-Time Techniques</a>
+      <p>Saad-Falcon and colleagues, 2024. Inference-time technique composition as a searchable design
+        space, plus a careful ablation of what each module contributes.</p>
+    </div>
+
+    <div class="reading">
+      <a href="https://arxiv.org/abs/2502.17578">How Do Large Language Monkeys Get Their Power (Laws)?</a>
+      <p>Schaeffer, Kazdan, Hughes, Juravsky, Price, Lynch, Jones, Kirk, Mirhoseini, Koyejo, 2025.
+        Resolves the exponential-versus-power-law puzzle and turns it into a cheap forecasting
+        method.</p>
+    </div>
+  </section>
+
+  </article>
+
+  <footer>
+    <p>Built as a study companion for Lesson 2 of
+      <a href="https://cs329a.stanford.edu/">Stanford CS329A, Self-Improving AI Agents</a>, Autumn 2025.
+      Written from the course syllabus and the four assigned papers rather than from a transcript of
+      the lecture, so the emphasis and ordering are this page's own; numbers and findings are drawn
+      from the papers linked above. Figures marked schematic are illustrative and carry no data.</p>
+    <p>Reading settings: this page opens on a soft off-white background with dark slate text rather
+      than black on white, keeps lines to roughly 65 characters, and sets body type in a serif at
+      1.75 line height. Dusk shifts the palette warm for evening reading; Night uses dark grey and
+      soft grey rather than black and white, because maximum contrast is harder to read for long
+      stretches, not easier. Nothing on the page animates unless you click it.</p>
+  </footer>
+
+</div>
+
+<div class="controls" role="group" aria-label="Reading comfort">
+  <div class="grp" role="group" aria-label="Colour">
+    <button type="button" data-theme-btn="paper" aria-pressed="true">Paper</button>
+    <button type="button" data-theme-btn="dusk" aria-pressed="false">Dusk</button>
+    <button type="button" data-theme-btn="night" aria-pressed="false">Night</button>
+  </div>
+  <div class="sep" aria-hidden="true"></div>
+  <div class="grp" role="group" aria-label="Text size">
+    <button type="button" data-size="17px" aria-pressed="false" title="Smaller text">A</button>
+    <button type="button" data-size="19px" aria-pressed="true" title="Default text size" style="font-size:.85rem">A</button>
+    <button type="button" data-size="21.5px" aria-pressed="false" title="Larger text" style="font-size:.98rem">A</button>
+  </div>
+  <div class="sep" aria-hidden="true"></div>
+  <button type="button" id="roomy" aria-pressed="false" title="More space between lines">Spacing</button>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setTheme('night');
+    }
+
+    function setTheme(name) {
+      root.setAttribute('data-theme', name);
+      document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.themeBtn === name));
+      });
+    }
+
+    document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+      b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); });
+    });
+
+    document.querySelectorAll('[data-size]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        root.style.setProperty('--fs', b.dataset.size);
+        document.querySelectorAll('[data-size]').forEach(function (o) {
+          o.setAttribute('aria-pressed', String(o === b));
+        });
+      });
+    });
+
+    var roomy = document.getElementById('roomy');
+    roomy.addEventListener('click', function () {
+      var on = document.body.classList.toggle('roomy');
+      roomy.setAttribute('aria-pressed', String(on));
+    });
+  })();
+</script>
+</body>
+</html>
