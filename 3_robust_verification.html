@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robust Verification — CS329A Lesson 3</title>
+<meta name="description" content="A reader's guide to Lesson 3 of Stanford CS329A, Self-Improving AI Agents: how machines decide which of their own answers to trust.">
+<style>
+  /* ---------- palette: day (default) ---------- */
+  :root {
+    --paper:   #E9EDEA;
+    --panel:   #F3F6F3;
+    --ink:     #212B28;
+    --soft:    #4F615B;
+    --faint:   #7C8B85;
+    --rule:    #C7D1CC;
+    --teal:    #2C6E68;
+    --moss:    #4C7A4E;
+    --brick:   #9C5A50;
+    --ochre:   #8A7133;
+    --wash:    rgba(44,110,104,.08);
+
+    --scale: 1;
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Georgia, "Times New Roman", serif;
+    --sans:  "Avenir Next", Avenir, "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    --measure: 63ch;
+  }
+  /* dusk: mid-tone, for evening reading without a black field */
+  html[data-light="dusk"] {
+    --paper: #3B4340; --panel: #454D4A; --ink: #DFE5E1; --soft: #B2BEB8;
+    --faint: #93A099; --rule: #58625E; --teal: #86C1B9; --moss: #98C296;
+    --brick: #D8A197; --ochre: #CDB279; --wash: rgba(134,193,185,.10);
+  }
+  /* night: low luminance, ink kept off pure white to limit halation */
+  html[data-light="night"] {
+    --paper: #1A201E; --panel: #232A28; --ink: #C4CDC9; --soft: #93A19B;
+    --faint: #76837E; --rule: #333B38; --teal: #6FAAA3; --moss: #83AC82;
+    --brick: #C08C83; --ochre: #B69C68; --wash: rgba(111,170,163,.10);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: calc(1.0625rem * var(--scale));
+    line-height: 1.78;
+    letter-spacing: .002em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ---------- top bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .bar-in {
+    max-width: 860px; margin: 0 auto; padding: .55rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    font-family: var(--sans); font-size: .8rem; color: var(--soft);
+  }
+  .bar-label { margin-right: auto; letter-spacing: .01em; }
+  .set { display: flex; align-items: center; gap: .4rem; }
+  .set > span { color: var(--faint); }
+  button.opt {
+    font: inherit; color: var(--soft); background: transparent;
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: .18rem .5rem; cursor: pointer;
+  }
+  button.opt:hover { border-color: var(--teal); color: var(--teal); }
+  button.opt[aria-pressed="true"] {
+    background: var(--wash); border-color: var(--teal); color: var(--teal);
+  }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 2px; }
+  #progress {
+    height: 2px; background: var(--teal); width: 0;
+    transform-origin: 0 50%;
+  }
+
+  /* ---------- layout ---------- */
+  .page { max-width: 860px; margin: 0 auto; padding: 0 1.5rem 6rem; }
+  .col  { max-width: 720px; margin: 0 auto; }
+  p, ul, ol, h1, h2, h3, .deck, .note { max-width: var(--measure); }
+  p { margin: 0 0 1.35em; }
+
+  /* ---------- masthead ---------- */
+  header.top { padding: 5rem 0 0; }
+  .course {
+    font-family: var(--sans); font-size: .78rem; line-height: 1.6;
+    color: var(--faint); margin-bottom: 2.6rem;
+  }
+  .course b { display: block; font-weight: 600; color: var(--soft); letter-spacing: .01em; }
+  h1 {
+    font-weight: 400; font-size: calc(3.1rem * var(--scale));
+    line-height: 1.06; letter-spacing: -.022em; margin: 0 0 1.1rem;
+  }
+  .deck {
+    font-size: calc(1.28rem * var(--scale)); line-height: 1.5;
+    color: var(--soft); font-style: italic; margin: 0 0 3.2rem;
+    max-width: 34ch;
+  }
+  .lede p:first-of-type::first-line { letter-spacing: .01em; }
+
+  /* ---------- reading order card ---------- */
+  .order {
+    margin: 3.5rem 0 4.5rem; padding: 1.6rem 1.8rem 1.2rem;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
+    max-width: var(--measure);
+  }
+  .order h2 {
+    font-family: var(--sans); font-size: .8rem; font-weight: 600;
+    color: var(--faint); margin: 0 0 1rem; letter-spacing: .02em;
+  }
+  .order ol { margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+  .order li { counter-increment: toc; display: flex; gap: .9rem; margin-bottom: .55rem; }
+  .order li::before {
+    content: counter(toc); font-family: var(--sans); font-size: .74rem;
+    color: var(--faint); padding-top: .42em; min-width: 1ch;
+  }
+  .order a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .order a:hover { border-bottom-color: var(--teal); color: var(--teal); }
+
+  /* ---------- sections ---------- */
+  section { margin: 0 0 5.5rem; scroll-margin-top: 5rem; }
+  .head { display: grid; grid-template-columns: 3rem 1fr; margin-bottom: 1.9rem; }
+  .num {
+    font-family: var(--sans); font-size: .78rem; color: var(--faint);
+    padding-top: .95em;
+  }
+  h2 {
+    font-weight: 400; font-size: calc(1.85rem * var(--scale));
+    line-height: 1.22; letter-spacing: -.012em; margin: 0;
+  }
+  .head + p, section > p, section > figure, section > .note, section > ul { margin-left: 3rem; }
+  @media (max-width: 620px) {
+    .head { grid-template-columns: 1fr; }
+    .num { padding: 0 0 .3rem; }
+    .head + p, section > p, section > figure, section > .note, section > ul { margin-left: 0; }
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 600;
+    font-size: calc(.95rem * var(--scale)); margin: 2.4rem 0 .7rem 3rem;
+    color: var(--soft);
+  }
+  @media (max-width: 620px) { h3 { margin-left: 0; } }
+
+  ul { padding-left: 1.1rem; margin: 0 0 1.35em; }
+  li { margin-bottom: .5em; }
+  strong { font-weight: 600; }
+  em.term { font-style: normal; color: var(--teal); }
+
+  .note {
+    border-left: 2px solid var(--rule); padding: .1rem 0 .1rem 1.1rem;
+    color: var(--soft); font-size: calc(.97rem * var(--scale));
+    margin: 2rem 0;
+  }
+  .note b { font-family: var(--sans); font-size: .82em; color: var(--faint); font-weight: 600; }
+
+  /* ---------- figures ---------- */
+  figure { margin: 2.6rem 0; max-width: 720px; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figure svg text { font-family: var(--sans); }
+  figcaption {
+    font-family: var(--sans); font-size: .8rem; line-height: 1.6;
+    color: var(--faint); margin-top: .9rem; max-width: 58ch;
+  }
+
+  /* ---------- sources ---------- */
+  .sources { border-top: 1px solid var(--rule); padding-top: 2.4rem; }
+  .sources h2 { font-size: calc(1.25rem * var(--scale)); margin-bottom: 1.6rem; }
+  .paper { display: grid; grid-template-columns: 1fr; gap: .15rem; margin-bottom: 1.5rem; max-width: var(--measure); }
+  .paper a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .paper a:hover { color: var(--teal); border-bottom-color: var(--teal); }
+  .paper span { font-family: var(--sans); font-size: .78rem; color: var(--faint); }
+
+  .colophon {
+    margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--rule);
+    font-family: var(--sans); font-size: .8rem; line-height: 1.75; color: var(--faint);
+    max-width: 58ch;
+  }
+  .colophon ul { padding-left: 1.1rem; }
+  .colophon li { margin-bottom: .3em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-in">
+    <span class="bar-label">Robust Verification</span>
+    <span class="set">
+      <span>Light</span>
+      <button class="opt" data-light-set="day"   aria-pressed="true">Day</button>
+      <button class="opt" data-light-set="dusk"  aria-pressed="false">Dusk</button>
+      <button class="opt" data-light-set="night" aria-pressed="false">Night</button>
+    </span>
+    <span class="set">
+      <span>Text</span>
+      <button class="opt" data-size="0.94" aria-pressed="false">S</button>
+      <button class="opt" data-size="1"    aria-pressed="true">M</button>
+      <button class="opt" data-size="1.13" aria-pressed="false">L</button>
+    </span>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<div class="page">
+<div class="col">
+
+<header class="top">
+  <div class="course">
+    <b>Stanford CS329A, Self-Improving AI Agents</b>
+    Lesson 3 of the Autumn 2025 lecture series
+  </div>
+
+  <h1>Robust Verification</h1>
+
+  <p class="deck">Producing a correct answer turns out to be easier than knowing which answer is correct — and closing that distance is what makes an agent able to improve itself.</p>
+
+  <div class="lede">
+    <p>Ask a language model a hard question once and it will often get it wrong. Ask it the same question a hundred times and, surprisingly often, at least one of those hundred attempts is right. The right answer is already there, sitting in the pile. The problem is that nobody knows which one it is.</p>
+
+    <p>Everything in this lesson follows from that one asymmetry. If you had a perfect judge — something that could look at a hundred attempts and reliably point at the good one — you could turn a mediocre model into a strong one without retraining it at all. You would also have something more valuable: a source of feedback the model could learn from, over and over, without a human in the room. That judge is what researchers call a <em class="term">verifier</em>, and this lesson is about how to build one you can actually trust.</p>
+  </div>
+</header>
+
+<figure>
+  <svg viewBox="0 0 680 250" role="img" aria-labelledby="fig1t fig1d">
+    <title id="fig1t">The generation–verification gap</title>
+    <desc id="fig1d">Two horizontal bars. A short bar shows how often the first answer is correct. A much longer bar shows how often at least one of a hundred sampled answers is correct. The distance between them is labelled the generation–verification gap.</desc>
+    <defs>
+      <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="var(--teal)" stroke-width="1.1" opacity=".38"/>
+      </pattern>
+    </defs>
+
+    <!-- axis -->
+    <line x1="70" y1="196" x2="620" y2="196" stroke="var(--rule)" stroke-width="1"/>
+    <g font-family="var(--sans)" font-size="11" fill="var(--faint)">
+      <text x="70" y="216" text-anchor="middle">0%</text>
+      <text x="620" y="216" text-anchor="middle">100%</text>
+    </g>
+
+    <!-- bar A -->
+    <g>
+      <rect x="70" y="52" width="182" height="18" rx="9" fill="var(--soft)" opacity=".55"/>
+      <text x="70" y="40" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">One attempt, taken as it comes</text>
+      <line x1="252" y1="52" x2="252" y2="196" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4"/>
+    </g>
+
+    <!-- bar B -->
+    <g>
+      <rect x="70" y="128" width="482" height="18" rx="9" fill="var(--teal)" opacity=".7"/>
+      <text x="70" y="116" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">At least one of a hundred attempts is right</text>
+      <line x1="552" y1="52" x2="552" y2="196" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4"/>
+    </g>
+
+    <!-- gap -->
+    <rect x="252" y="52" width="300" height="18" fill="url(#hatch)"/>
+    <path d="M252 90 L552 90" stroke="var(--teal)" stroke-width="1.2"/>
+    <path d="M252 90 l7 -4.5 v9 z" fill="var(--teal)"/>
+    <path d="M552 90 l-7 -4.5 v9 z" fill="var(--teal)"/>
+    <text x="402" y="82" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--teal)">the generation–verification gap</text>
+
+    <text x="402" y="170" text-anchor="middle" font-family="var(--sans)" font-size="11.5" fill="var(--faint)">everything a good verifier could recover, for free</text>
+  </svg>
+  <figcaption>Sampling many times raises the chance that a correct answer exists somewhere in the batch. Selecting it is a separate problem, and the whole field of verification lives in the space between the two bars. Widths here are illustrative, not measured.</figcaption>
+</figure>
+
+<div class="order">
+  <h2>How to read this page</h2>
+  <ol>
+    <li><a href="#s1">Why picking is harder than producing</a></li>
+    <li><a href="#s2">The first verifiers: train a model to grade</a></li>
+    <li><a href="#s3">A right answer is not a right method</a></li>
+    <li><a href="#s4">Getting step-by-step labels without humans</a></li>
+    <li><a href="#s5">When nothing can check the answer</a></li>
+    <li><a href="#s6">What makes a verifier robust</a></li>
+    <li><a href="#s7">The papers behind this lesson</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<section id="s1">
+  <div class="head"><div class="num">1</div>
+    <h2>Why picking is harder than producing</h2>
+  </div>
+
+  <p>The previous lesson established that spending more compute at test time works: sample many candidate solutions instead of one, and the odds that a correct solution appears among them climb steadily. Researchers call this <em class="term">coverage</em> — the chance that at least one attempt in a batch is right.</p>
+
+  <p>Coverage is only half a method. To turn it into an answer you have to choose, and choosing badly wastes everything the sampling bought you. Three things can do the choosing, and each has a different failure mode.</p>
+
+  <p><strong>A tool with ground truth.</strong> Run the code and see whether the tests pass. Check the proof in Lean. These verifiers are close to perfect, and they cover a narrow slice of what we want agents to do. <strong>A human.</strong> Accurate and broad, and impossible to scale to millions of judgements. <strong>Another model.</strong> Cheap, general, endlessly available, and wrong often enough to be dangerous.</p>
+
+  <p>The rest of this lesson is essentially one long attempt to make the third option behave more like the first two.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 236" role="img" aria-labelledby="fig2t fig2d">
+      <title id="fig2t">The best-of-n loop</title>
+      <desc id="fig2d">A question fans out into five candidate answers. A verifier scores each one, and the highest-scoring candidate is returned.</desc>
+
+      <rect x="18" y="94" width="104" height="46" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+      <text x="70" y="122" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">question</text>
+
+      <g stroke="var(--rule)" stroke-width="1.2" fill="none">
+        <path d="M122 117 C 168 117, 168 34, 214 34"/>
+        <path d="M122 117 C 168 117, 168 75, 214 75"/>
+        <path d="M122 117 C 168 117, 168 117, 214 117"/>
+        <path d="M122 117 C 168 117, 168 159, 214 159"/>
+        <path d="M122 117 C 168 117, 168 200, 214 200"/>
+      </g>
+
+      <g font-family="var(--sans)" font-size="11.5">
+        <rect x="214" y="20" width="118" height="28" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="228" y="38" fill="var(--soft)">attempt 1</text>
+        <rect x="214" y="61" width="118" height="28" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="228" y="79" fill="var(--soft)">attempt 2</text>
+        <rect x="214" y="103" width="118" height="28" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.6"/>
+        <text x="228" y="121" fill="var(--ink)">attempt 3</text>
+        <rect x="214" y="145" width="118" height="28" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="228" y="163" fill="var(--soft)">attempt 4</text>
+        <rect x="214" y="186" width="118" height="28" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="228" y="204" fill="var(--soft)">attempt 5</text>
+      </g>
+
+      <g stroke="var(--rule)" stroke-width="1.2" fill="none">
+        <path d="M332 34 C 380 34, 380 117, 420 117"/>
+        <path d="M332 75 C 380 75, 380 117, 420 117"/>
+        <path d="M332 117 L 420 117" stroke="var(--teal)" stroke-width="1.6"/>
+        <path d="M332 159 C 380 159, 380 117, 420 117"/>
+        <path d="M332 200 C 380 200, 380 117, 420 117"/>
+      </g>
+
+      <rect x="420" y="88" width="112" height="58" rx="4" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+      <text x="476" y="112" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--teal)">verifier</text>
+      <text x="476" y="130" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="var(--faint)">scores each</text>
+
+      <path d="M532 117 L 588 117" stroke="var(--teal)" stroke-width="1.6"/>
+      <path d="M596 117 l-9 -5.5 v11 z" fill="var(--teal)"/>
+      <text x="614" y="112" font-family="var(--sans)" font-size="12" fill="var(--ink)">answer</text>
+      <text x="614" y="129" font-family="var(--sans)" font-size="11" fill="var(--faint)">returned</text>
+    </svg>
+    <figcaption>Best-of-n, the pattern underneath most of this lesson. Quality now depends on two things that can be improved separately: how good the batch is, and how good the picker is.</figcaption>
+  </figure>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <div class="head"><div class="num">2</div>
+    <h2>The first verifiers: train a model to grade</h2>
+  </div>
+
+  <p>The idea has a clean origin. In 2021, Cobbe and colleagues at OpenAI released <strong>GSM8K</strong>, a set of 8.5 thousand grade-school maths word problems written to be linguistically varied but conceptually simple. Even the largest models of the day did poorly on them, which was the point: the problems isolate multi-step reasoning from knowledge.</p>
+
+  <p>Their fix was to train a second model whose only job was to judge whether a completion was correct. At test time, generate many candidate solutions and return the one the judge ranks highest. It worked, and the more interesting finding was about scaling: verification improved with additional data <em>faster</em> than simply fine-tuning the generator on the same data.</p>
+
+  <div class="note">
+    <b>The idea worth keeping</b><br>
+    Judging an answer is a smaller job than producing one. So a modest verifier can lift a much larger generator, and the compute you spend on judging often buys more than the same compute spent on training.
+  </div>
+
+  <p>This style of verifier grades the finished product. It is now usually called an <em class="term">outcome reward model</em>, and the next section is about the specific way it goes wrong.</p>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <div class="head"><div class="num">3</div>
+    <h2>A right answer is not a right method</h2>
+  </div>
+
+  <p>Suppose a model makes an arithmetic slip early on, then makes a second slip later that happens to cancel the first, and arrives at the correct number. A verifier that only sees the final answer marks this a success. Worse, if you use that verifier as a training signal, you have just taught the model that the broken reasoning was good.</p>
+
+  <p>These false positives are not rare, and they get more common as problems get longer. The response, from Lightman and colleagues in <em>Let's Verify Step by Step</em> (2023), was to move the feedback inward: grade every intermediate step rather than the final result. That is <em class="term">process supervision</em>, and the model doing it is a <em class="term">process reward model</em>.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 250" role="img" aria-labelledby="fig3t fig3d">
+      <title id="fig3t">Outcome supervision compared with process supervision</title>
+      <desc id="fig3d">Two rows of four reasoning steps. In the first row only the final answer is marked, and it is marked correct even though step three was flawed. In the second row every step is marked, and step three is flagged.</desc>
+
+      <g font-family="var(--sans)" font-size="11.5">
+        <!-- row 1 -->
+        <text x="18" y="34" fill="var(--soft)" font-size="12.5">Grading the outcome</text>
+        <g>
+          <rect x="18" y="48" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+          <text x="74" y="72" text-anchor="middle" fill="var(--soft)">step 1</text>
+          <rect x="146" y="48" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+          <text x="202" y="72" text-anchor="middle" fill="var(--soft)">step 2</text>
+          <rect x="274" y="48" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+          <text x="330" y="72" text-anchor="middle" fill="var(--soft)">step 3</text>
+          <rect x="402" y="48" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+          <text x="458" y="72" text-anchor="middle" fill="var(--soft)">step 4</text>
+          <rect x="530" y="48" width="118" height="40" rx="4" fill="none" stroke="var(--moss)" stroke-width="1.5"/>
+          <text x="589" y="72" text-anchor="middle" fill="var(--moss)">answer ✓</text>
+        </g>
+        <text x="330" y="106" text-anchor="middle" fill="var(--brick)" font-size="11">step 3 was wrong, and nothing noticed</text>
+
+        <!-- row 2 -->
+        <text x="18" y="160" fill="var(--soft)" font-size="12.5">Grading the process</text>
+        <g>
+          <rect x="18" y="174" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--moss)" stroke-width="1.4"/>
+          <text x="66" y="198" text-anchor="middle" fill="var(--soft)">step 1</text>
+          <text x="114" y="198" text-anchor="middle" fill="var(--moss)">✓</text>
+          <rect x="146" y="174" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--moss)" stroke-width="1.4"/>
+          <text x="194" y="198" text-anchor="middle" fill="var(--soft)">step 2</text>
+          <text x="242" y="198" text-anchor="middle" fill="var(--moss)">✓</text>
+          <rect x="274" y="174" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--brick)" stroke-width="1.8"/>
+          <text x="322" y="198" text-anchor="middle" fill="var(--brick)">step 3</text>
+          <text x="370" y="198" text-anchor="middle" fill="var(--brick)">✕</text>
+          <rect x="402" y="174" width="112" height="40" rx="4" fill="var(--panel)" stroke="var(--rule)" stroke-dasharray="4 3"/>
+          <text x="458" y="198" text-anchor="middle" fill="var(--faint)">step 4</text>
+          <rect x="530" y="174" width="118" height="40" rx="4" fill="none" stroke="var(--rule)" stroke-dasharray="4 3"/>
+          <text x="589" y="198" text-anchor="middle" fill="var(--faint)">answer</text>
+        </g>
+        <text x="330" y="232" text-anchor="middle" fill="var(--teal)" font-size="11">the error is located, not just detected</text>
+      </g>
+    </svg>
+    <figcaption>Outcome supervision gives one bit of feedback per solution and can be fooled by luck. Process supervision gives feedback at every step, which both catches false positives and tells the model where it went wrong.</figcaption>
+  </figure>
+
+  <p>The results were decisive. Process supervision clearly beat outcome supervision on the harder MATH dataset, and their process-supervised model solved 78% of problems in a representative subset of the MATH test set. Active learning — choosing which solutions are worth having a human label — made the labelling budget go considerably further.</p>
+
+  <p>The catch is in the sentence you just read. Those labels came from people. The team released <strong>PRM800K</strong>, 800,000 step-level human judgements, which is an extraordinary gift to the research community and an obviously unrepeatable way to build verifiers for every new domain.</p>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <div class="head"><div class="num">4</div>
+    <h2>Getting step-by-step labels without humans</h2>
+  </div>
+
+  <p>Math-Shepherd (Wang et al., 2023) asks a simple question: what would it mean for a step to be good? A reasonable answer is that a good step leaves you in a position from which the problem can still be solved. And that is something you can measure by experiment.</p>
+
+  <p>Take a partial solution up to some step. From that exact point, let the model continue to completion many times over. Count how many of those continuations reach the correct final answer. That fraction becomes the step's label. No human reads anything.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 250" role="img" aria-labelledby="fig4t fig4d">
+      <title id="fig4t">Automatic step labelling by rollout</title>
+      <desc id="fig4d">From a partial solution, six continuations are sampled. Four reach the correct answer and two do not, giving the step a score of four out of six.</desc>
+
+      <rect x="18" y="98" width="150" height="52" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+      <text x="93" y="119" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--ink)">solution so far</text>
+      <text x="93" y="137" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="var(--faint)">up to step k</text>
+
+      <g fill="none" stroke-width="1.2">
+        <path d="M168 124 C 236 124, 236 30,  300 30"  stroke="var(--moss)"/>
+        <path d="M168 124 C 236 124, 236 68,  300 68"  stroke="var(--moss)"/>
+        <path d="M168 124 C 236 124, 236 105, 300 105" stroke="var(--brick)"/>
+        <path d="M168 124 C 236 124, 236 143, 300 143" stroke="var(--moss)"/>
+        <path d="M168 124 C 236 124, 236 181, 300 181" stroke="var(--moss)"/>
+        <path d="M168 124 C 236 124, 236 219, 300 219" stroke="var(--brick)"/>
+      </g>
+
+      <g font-family="var(--sans)" font-size="11.5">
+        <circle cx="310" cy="30"  r="5" fill="var(--moss)"/>
+        <text x="326" y="34" fill="var(--soft)">reaches the correct answer</text>
+        <circle cx="310" cy="68"  r="5" fill="var(--moss)"/>
+        <text x="326" y="72" fill="var(--soft)">reaches the correct answer</text>
+        <circle cx="310" cy="105" r="5" fill="none" stroke="var(--brick)" stroke-width="1.6"/>
+        <text x="326" y="109" fill="var(--faint)">goes astray</text>
+        <circle cx="310" cy="143" r="5" fill="var(--moss)"/>
+        <text x="326" y="147" fill="var(--soft)">reaches the correct answer</text>
+        <circle cx="310" cy="181" r="5" fill="var(--moss)"/>
+        <text x="326" y="185" fill="var(--soft)">reaches the correct answer</text>
+        <circle cx="310" cy="219" r="5" fill="none" stroke="var(--brick)" stroke-width="1.6"/>
+        <text x="326" y="223" fill="var(--faint)">goes astray</text>
+      </g>
+
+      <line x1="556" y1="26" x2="556" y2="224" stroke="var(--rule)"/>
+      <text x="576" y="118" font-family="var(--sans)" font-size="13" fill="var(--teal)">score</text>
+      <text x="576" y="140" font-family="var(--sans)" font-size="13" fill="var(--teal)">for step k</text>
+      <text x="576" y="166" font-family="var(--sans)" font-size="17" fill="var(--ink)">4 / 6</text>
+    </svg>
+    <figcaption>A step is scored by how often the model can still finish correctly from there. The label is a statistic about the future, gathered by simulation rather than by asking anyone.</figcaption>
+  </figure>
+
+  <p>Trained this way, the verifier does two jobs. Used at test time to rerank candidates, and used during training as a step-level reward signal, it lifted a Mistral-7B model from 77.9% to 84.1% on GSM8K and from 28.6% to 33.0% on MATH; adding reranking on top brought those to 89.1% and 43.5%.</p>
+
+  <div class="note">
+    <b>The constraint that remains</b><br>
+    This trick needs a reliable check on the final answer, because that is what tells you whether a rollout succeeded. In maths and code you have one. In writing a research summary, an incident report, or a legal argument, you do not.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <div class="head"><div class="num">5</div>
+    <h2>When nothing can check the answer</h2>
+  </div>
+
+  <p>This is where most real agent work lives, and it is the subject of <em>Shrinking the Generation-Verification Gap with Weak Verifiers</em> (Saad-Falcon et al., NeurIPS 2025), a paper from the group teaching this course.</p>
+
+  <p>What you have available in the open-ended case is a collection of weak verifiers: language models prompted to act as judges, reward models trained on preference data, small classifiers. Each one is individually mediocre. They disagree with each other. They output scores on incompatible scales — one gives a probability, another a rating out of ten, another a bare yes or no. Some are actively unhelpful on a given task.</p>
+
+  <p>The obvious move is to average them, and the paper's first finding is that averaging is the wrong move. Verifiers differ substantially in accuracy, so an unweighted vote lets the poor ones drag down the good ones. Weighted combinations do much better — but weights are normally learned from labelled data, which is exactly what you do not have.</p>
+
+  <h3>Weaver's answer</h3>
+
+  <p>The framework, <strong>Weaver</strong>, borrows from weak supervision: you can estimate how accurate each verifier is by looking at their patterns of agreement and disagreement, without ever seeing a correct answer. Around that core it adds two practical repairs — normalising the mismatched output formats using dataset statistics, and filtering out verifiers that are not pulling their weight.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 246" role="img" aria-labelledby="fig5t fig5d">
+      <title id="fig5t">Weighting an ensemble of weak verifiers</title>
+      <desc id="fig5d">Five weak verifiers with estimated accuracies feed into a combiner. Their line thickness reflects the weight given to each; one low-accuracy verifier is dropped.</desc>
+
+      <text x="18" y="26" font-family="var(--sans)" font-size="12" fill="var(--faint)">weak verifiers, with accuracy estimated from their agreement</text>
+
+      <g font-family="var(--sans)" font-size="11.5">
+        <rect x="18" y="40" width="176" height="30" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="32" y="60" fill="var(--soft)">judge model A</text>
+        <rect x="18" y="80" width="176" height="30" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="32" y="100" fill="var(--soft)">judge model B</text>
+        <rect x="18" y="120" width="176" height="30" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="32" y="140" fill="var(--soft)">reward model C</text>
+        <rect x="18" y="160" width="176" height="30" rx="4" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="32" y="180" fill="var(--soft)">reward model D</text>
+        <rect x="18" y="200" width="176" height="30" rx="4" fill="none" stroke="var(--rule)" stroke-dasharray="4 3"/>
+        <text x="32" y="220" fill="var(--faint)">verifier E, filtered out</text>
+      </g>
+
+      <g fill="none" stroke="var(--teal)" opacity=".75">
+        <path d="M194 55  C 268 55,  268 122, 342 122" stroke-width="4.5"/>
+        <path d="M194 95  C 268 95,  268 122, 342 122" stroke-width="2"/>
+        <path d="M194 135 C 268 135, 268 122, 342 122" stroke-width="6"/>
+        <path d="M194 175 C 268 175, 268 122, 342 122" stroke-width="1.2"/>
+      </g>
+      <path d="M194 215 C 268 215, 268 122, 342 122" fill="none" stroke="var(--rule)" stroke-width="1" stroke-dasharray="3 4"/>
+
+      <text x="268" y="34" font-family="var(--sans)" font-size="11" fill="var(--faint)">thickness = weight</text>
+
+      <rect x="342" y="96" width="128" height="54" rx="4" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+      <text x="406" y="119" text-anchor="middle" font-family="var(--sans)" font-size="12.5" fill="var(--teal)">Weaver</text>
+      <text x="406" y="137" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="var(--faint)">weighted combination</text>
+
+      <path d="M470 123 L 528 123" stroke="var(--teal)" stroke-width="1.6"/>
+      <path d="M536 123 l-9 -5.5 v11 z" fill="var(--teal)"/>
+      <text x="552" y="118" font-family="var(--sans)" font-size="12" fill="var(--ink)">one score</text>
+      <text x="552" y="135" font-family="var(--sans)" font-size="11" fill="var(--faint)">per candidate</text>
+    </svg>
+    <figcaption>Accuracies are estimated without labels, from how the verifiers agree and disagree across a dataset. Weak verifiers that add noise rather than signal are removed rather than averaged in.</figcaption>
+  </figure>
+
+  <p>The headline result is a statement about where capability can come from. Using Llama 3.3 70B Instruct as the generator and an ensemble of judge and reward models of 70B parameters or smaller as verifiers, Weaver reached 87.7% average accuracy across the reasoning and maths tasks tested. That is comparable to o3-mini, and it is roughly the size of the jump from GPT-4o to o3-mini — a jump that took extensive fine-tuning and post-training to achieve.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 214" role="img" aria-labelledby="fig6t fig6d">
+      <title id="fig6t">Accuracy comparison reported in the Weaver paper</title>
+      <desc id="fig6d">Bar chart. GPT-4o at 69.0 percent, o3-mini at 86.7 percent, and Llama 3.3 70B with the Weaver ensemble at 87.7 percent average accuracy.</desc>
+
+      <line x1="230" y1="24" x2="230" y2="176" stroke="var(--rule)"/>
+
+      <g font-family="var(--sans)" font-size="12">
+        <text x="218" y="52" text-anchor="end" fill="var(--soft)">GPT-4o</text>
+        <rect x="230" y="36" width="248" height="22" rx="2" fill="var(--soft)" opacity=".45"/>
+        <text x="492" y="52" fill="var(--ink)" font-size="12.5">69.0</text>
+
+        <text x="218" y="104" text-anchor="end" fill="var(--soft)">o3-mini</text>
+        <rect x="230" y="88" width="312" height="22" rx="2" fill="var(--soft)" opacity=".45"/>
+        <text x="556" y="104" fill="var(--ink)" font-size="12.5">86.7</text>
+
+        <text x="218" y="156" text-anchor="end" fill="var(--ink)">Llama 3.3 70B with Weaver</text>
+        <rect x="230" y="140" width="316" height="22" rx="2" fill="var(--teal)" opacity=".8"/>
+        <text x="560" y="156" fill="var(--ink)" font-size="12.5">87.7</text>
+      </g>
+      <text x="230" y="196" font-family="var(--sans)" font-size="11" fill="var(--faint)">average accuracy across the reasoning and maths tasks evaluated, in percent</text>
+    </svg>
+    <figcaption>Figures as reported in the Weaver paper. The point is not the ranking but the substitution: careful selection over an open model's samples reaching the territory of a heavily post-trained reasoning model.</figcaption>
+  </figure>
+
+  <p>Running a whole committee of 70B judges for every candidate is expensive, so the paper closes the loop by distilling the ensemble's combined scores into a single 400M-parameter cross-encoder. The committee is used once, to teach; the small model does the work afterwards.</p>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <div class="head"><div class="num">6</div>
+    <h2>What makes a verifier robust</h2>
+  </div>
+
+  <p>Reading the four papers together, a shape emerges. Verification methods trade off along one axis: the more certain a verifier is, the narrower the range of tasks it applies to.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 268" role="img" aria-labelledby="fig7t fig7d">
+      <title id="fig7t">The trade-off between certainty and breadth</title>
+      <desc id="fig7d">Four verification approaches arranged as a descending stair: executable ground truth is the most certain but applies to the fewest tasks, while a single language model judge is the least certain and applies to almost anything.</desc>
+
+      <g font-family="var(--sans)" font-size="12">
+        <rect x="60" y="30" width="200" height="44" rx="3" fill="var(--panel)" stroke="var(--moss)" stroke-width="1.5"/>
+        <text x="76" y="50" fill="var(--ink)">Run it and see</text>
+        <text x="76" y="66" fill="var(--faint)" font-size="11">tests, compilers, proof checkers</text>
+
+        <rect x="140" y="88" width="200" height="44" rx="3" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+        <text x="156" y="108" fill="var(--ink)">Learned step-level reward</text>
+        <text x="156" y="124" fill="var(--faint)" font-size="11">PRMs, rollout-derived labels</text>
+
+        <rect x="220" y="146" width="200" height="44" rx="3" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <text x="236" y="166" fill="var(--ink)">Weighted ensemble of judges</text>
+        <text x="236" y="182" fill="var(--faint)" font-size="11">Weaver and relatives</text>
+
+        <rect x="300" y="204" width="200" height="44" rx="3" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+        <text x="316" y="224" fill="var(--soft)">One model, asked nicely</text>
+        <text x="316" y="240" fill="var(--faint)" font-size="11">a single judge prompt</text>
+      </g>
+
+      <line x1="34" y1="30" x2="34" y2="248" stroke="var(--rule)"/>
+      <g font-family="var(--sans)" font-size="11" fill="var(--faint)">
+        <text x="20" y="140" text-anchor="middle" transform="rotate(-90 20 140)">certainty falls</text>
+        <text x="560" y="140" text-anchor="middle" transform="rotate(-90 560 140)">breadth of tasks grows</text>
+      </g>
+      <line x1="640" y1="30" x2="640" y2="248" stroke="var(--rule)"/>
+    </svg>
+    <figcaption>Practical systems mix rungs: use the certain check wherever one exists, and fall back to the broader, noisier methods for the parts of a task that no tool can check.</figcaption>
+  </figure>
+
+  <h3>Four things to carry forward</h3>
+
+  <ul>
+    <li><strong>Verification is the bottleneck on self-improvement.</strong> An agent that improves by generating, filtering, and training on its own output can only get as good as its filter. Sharpen the verifier and every downstream loop gets better at once.</li>
+    <li><strong>Where feedback lands matters as much as whether it is right.</strong> A single verdict at the end of a long chain is a weak teaching signal; a verdict per step tells the model what to change.</li>
+    <li><strong>Correlated mistakes are the danger in ensembles.</strong> Combining verifiers helps because their errors are partly independent. Verifiers built from the same base model, or from the same preference data, fail together — and a confident consensus of wrong judges is worse than one honest judge.</li>
+    <li><strong>Any verifier used for training becomes a target.</strong> Optimise hard enough against an imperfect judge and the generator learns to satisfy the judge rather than the task. This is why the strongest available check, however narrow, should stay in the loop.</li>
+  </ul>
+
+  <div class="note">
+    <b>The open question</b><br>
+    Every method here is grounded, eventually, in a domain where answers can be checked. Extending robust verification to work that has no answer key — research, design, judgement, taste — is still unsolved, and it is where a great deal of current effort is going.
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="s7" class="sources">
+  <div class="head"><div class="num">7</div>
+    <h2>The papers behind this lesson</h2>
+  </div>
+
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2506.18203">Shrinking the Generation-Verification Gap with Weak Verifiers</a>
+    <span>Saad-Falcon, Buchanan, Chen, Huang, McLaughlin, Bhathal, Zhu, Athiwaratkun, Sala, Linderman, Mirhoseini, Ré. NeurIPS 2025.</span>
+  </div>
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2110.14168">Training Verifiers to Solve Math Word Problems</a>
+    <span>Cobbe et al., 2021. Introduces GSM8K and the best-of-n verifier.</span>
+  </div>
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2305.20050">Let's Verify Step by Step</a>
+    <span>Lightman et al., 2023. Process supervision and the PRM800K dataset.</span>
+  </div>
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2312.08935">Math-Shepherd: Verify and Reinforce LLMs Step-by-step without Human Annotations</a>
+    <span>Wang et al., 2023. Automatic process labels from rollouts.</span>
+  </div>
+
+  <div class="paper" style="margin-top:2.4rem">
+    <a href="https://www.youtube.com/watch?v=p7TdPUcPoik&list=PLangBM27OtEA&index=3">Lecture recording, Part 3: Robust Verification</a>
+    <span>YouTube</span>
+  </div>
+  <div class="paper">
+    <a href="https://cs329a.stanford.edu/">CS329A: Self-Improving AI Agents, course page</a>
+    <span>Stanford University, Autumn 2025. Instructors Aakanksha Chowdhery and Azalia Mirhoseini.</span>
+  </div>
+</section>
+
+<div class="colophon">
+  <p>This page is a written companion to Lesson 3, organised around the four papers assigned for that class. Figures are diagrams of the concepts rather than reproductions from the papers; reported numbers are attributed where they appear.</p>
+  <p>Set for comfortable reading:</p>
+  <ul>
+    <li>No pure white and no pure black anywhere — contrast is high enough to read easily and low enough not to glare.</li>
+    <li>Three light levels in the bar above, so the page can follow the room rather than fight it.</li>
+    <li>A serif face at a generous line-height, with lines capped near 63 characters so your eye finds the next line without searching.</li>
+    <li>Diagrams distinguish things by shape, position, and label as well as colour.</li>
+    <li>Nothing moves on its own, and motion preferences set in your system are respected.</li>
+  </ul>
+</div>
+
+</div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function press(group, active) {
+    group.forEach(function (b) { b.setAttribute('aria-pressed', String(b === active)); });
+  }
+
+  var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light-set]'));
+  lightBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      root.setAttribute('data-light', b.dataset.lightSet);
+      press(lightBtns, b);
+    });
+  });
+
+  var sizeBtns = Array.prototype.slice.call(document.querySelectorAll('[data-size]'));
+  sizeBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      root.style.setProperty('--scale', b.dataset.size);
+      press(sizeBtns, b);
+    });
+  });
+
+  // follow the system preference on first load
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    root.setAttribute('data-light', 'night');
+    press(lightBtns, document.querySelector('[data-light-set="night"]'));
+  } else {
+    root.setAttribute('data-light', 'day');
+  }
+
+  var bar = document.getElementById('progress');
+  function tick() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? Math.min(1, window.scrollY / h) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', tick, { passive: true });
+  window.addEventListener('resize', tick);
+  tick();
+})();
+</script>
+</body>
+</html>
