@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning from Feedback with Tools and Code — CS329A Lesson 4</title>
+<meta name="description" content="A reader's guide to Lesson 4 of Stanford CS329A, Self-Improving AI Agents: how an agent improves by taking seriously what came back.">
+<style>
+  /* ---------- palette: day (default) ---------- */
+  :root {
+    --paper:   #E9EDEA;
+    --panel:   #F3F6F3;
+    --ink:     #212B28;
+    --soft:    #4F615B;
+    --faint:   #7C8B85;
+    --rule:    #C7D1CC;
+    --teal:    #2C6E68;
+    --moss:    #4C7A4E;
+    --brick:   #9C5A50;
+    --ochre:   #8A7133;
+    --wash:    rgba(44,110,104,.08);
+
+    --scale: 1;
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Georgia, "Times New Roman", serif;
+    --sans:  "Avenir Next", Avenir, "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+    --measure: 63ch;
+  }
+  /* dusk: mid-tone, for evening reading without a black field */
+  html[data-light="dusk"] {
+    --paper: #3B4340; --panel: #454D4A; --ink: #DFE5E1; --soft: #B2BEB8;
+    --faint: #93A099; --rule: #58625E; --teal: #86C1B9; --moss: #98C296;
+    --brick: #D8A197; --ochre: #CDB279; --wash: rgba(134,193,185,.10);
+  }
+  /* night: low luminance, ink kept off pure white to limit halation */
+  html[data-light="night"] {
+    --paper: #1A201E; --panel: #232A28; --ink: #C4CDC9; --soft: #93A19B;
+    --faint: #76837E; --rule: #333B38; --teal: #6FAAA3; --moss: #83AC82;
+    --brick: #C08C83; --ochre: #B69C68; --wash: rgba(111,170,163,.10);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: calc(1.0625rem * var(--scale));
+    line-height: 1.78;
+    letter-spacing: .002em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ---------- top bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .bar-in {
+    max-width: 860px; margin: 0 auto; padding: .55rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    font-family: var(--sans); font-size: .8rem; color: var(--soft);
+  }
+  .bar-label { margin-right: auto; letter-spacing: .01em; }
+  .set { display: flex; align-items: center; gap: .4rem; }
+  .set > span { color: var(--faint); }
+  button.opt {
+    font: inherit; color: var(--soft); background: transparent;
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: .18rem .5rem; cursor: pointer;
+  }
+  button.opt:hover { border-color: var(--teal); color: var(--teal); }
+  button.opt[aria-pressed="true"] {
+    background: var(--wash); border-color: var(--teal); color: var(--teal);
+  }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 2px; }
+  #progress {
+    height: 2px; background: var(--teal); width: 0;
+    transform-origin: 0 50%;
+  }
+
+  /* ---------- layout ---------- */
+  .page { max-width: 860px; margin: 0 auto; padding: 0 1.5rem 6rem; }
+  .col  { max-width: 720px; margin: 0 auto; }
+  p, ul, ol, h1, h2, h3, .deck, .note { max-width: var(--measure); }
+  p { margin: 0 0 1.35em; }
+
+  /* ---------- masthead ---------- */
+  header.top { padding: 5rem 0 0; }
+  .course {
+    font-family: var(--sans); font-size: .78rem; line-height: 1.6;
+    color: var(--faint); margin-bottom: 2.6rem;
+  }
+  .course b { display: block; font-weight: 600; color: var(--soft); letter-spacing: .01em; }
+  h1 {
+    font-weight: 400; font-size: calc(3.1rem * var(--scale));
+    line-height: 1.06; letter-spacing: -.022em; margin: 0 0 1.1rem;
+  }
+  .deck {
+    font-size: calc(1.28rem * var(--scale)); line-height: 1.5;
+    color: var(--soft); font-style: italic; margin: 0 0 3.2rem;
+    max-width: 34ch;
+  }
+  .lede p:first-of-type::first-line { letter-spacing: .01em; }
+
+  /* ---------- reading order card ---------- */
+  .order {
+    margin: 3.5rem 0 4.5rem; padding: 1.6rem 1.8rem 1.2rem;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
+    max-width: var(--measure);
+  }
+  .order h2 {
+    font-family: var(--sans); font-size: .8rem; font-weight: 600;
+    color: var(--faint); margin: 0 0 1rem; letter-spacing: .02em;
+  }
+  .order ol { margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+  .order li { counter-increment: toc; display: flex; gap: .9rem; margin-bottom: .55rem; }
+  .order li::before {
+    content: counter(toc); font-family: var(--sans); font-size: .74rem;
+    color: var(--faint); padding-top: .42em; min-width: 1ch;
+  }
+  .order a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .order a:hover { border-bottom-color: var(--teal); color: var(--teal); }
+
+  /* ---------- sections ---------- */
+  section { margin: 0 0 5.5rem; scroll-margin-top: 5rem; }
+  .head { display: grid; grid-template-columns: 3rem 1fr; margin-bottom: 1.9rem; }
+  .num {
+    font-family: var(--sans); font-size: .78rem; color: var(--faint);
+    padding-top: .95em;
+  }
+  h2 {
+    font-weight: 400; font-size: calc(1.85rem * var(--scale));
+    line-height: 1.22; letter-spacing: -.012em; margin: 0;
+  }
+  .head + p, section > p, section > figure, section > .note, section > ul, section > .paper { margin-left: 3rem; }
+  @media (max-width: 620px) {
+    .head { grid-template-columns: 1fr; }
+    .num { padding: 0 0 .3rem; }
+    .head + p, section > p, section > figure, section > .note, section > ul, section > .paper { margin-left: 0; }
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 600;
+    font-size: calc(.95rem * var(--scale)); margin: 2.4rem 0 .7rem 3rem;
+    color: var(--soft);
+  }
+  @media (max-width: 620px) { h3 { margin-left: 0; } }
+
+  ul { padding-left: 1.1rem; margin: 0 0 1.35em; }
+  li { margin-bottom: .5em; }
+  strong { font-weight: 600; }
+  em.term { font-style: normal; color: var(--teal); }
+
+  .note {
+    border-left: 2px solid var(--rule); padding: .1rem 0 .1rem 1.1rem;
+    color: var(--soft); font-size: calc(.97rem * var(--scale));
+    margin: 2rem 0;
+  }
+  .note b { font-family: var(--sans); font-size: .82em; color: var(--faint); font-weight: 600; }
+
+  /* ---------- figures ---------- */
+  figure { margin: 2.6rem 0; max-width: 720px; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figure svg text { font-family: var(--sans); }
+  figcaption {
+    font-family: var(--sans); font-size: .8rem; line-height: 1.6;
+    color: var(--faint); margin-top: .9rem; max-width: 58ch;
+  }
+
+  /* ---------- sources ---------- */
+  .sources { border-top: 1px solid var(--rule); padding-top: 2.4rem; }
+  .sources h2 { font-size: calc(1.25rem * var(--scale)); margin-bottom: 1.6rem; }
+  .paper { display: grid; grid-template-columns: 1fr; gap: .15rem; margin-bottom: 1.5rem; max-width: var(--measure); }
+  .paper a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .paper a:hover { color: var(--teal); border-bottom-color: var(--teal); }
+  .paper span { font-family: var(--sans); font-size: .78rem; color: var(--faint); }
+
+  .colophon {
+    margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--rule);
+    font-family: var(--sans); font-size: .8rem; line-height: 1.75; color: var(--faint);
+    max-width: 58ch;
+  }
+  .colophon ul { padding-left: 1.1rem; }
+  .colophon li { margin-bottom: .3em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-in">
+    <span class="bar-label">Learning from Feedback with Tools and Code</span>
+    <span class="set">
+      <span>Light</span>
+      <button class="opt" data-light-set="day"   aria-pressed="true">Day</button>
+      <button class="opt" data-light-set="dusk"  aria-pressed="false">Dusk</button>
+      <button class="opt" data-light-set="night" aria-pressed="false">Night</button>
+    </span>
+    <span class="set">
+      <span>Text</span>
+      <button class="opt" data-size="0.94" aria-pressed="false">S</button>
+      <button class="opt" data-size="1"    aria-pressed="true">M</button>
+      <button class="opt" data-size="1.13" aria-pressed="false">L</button>
+    </span>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<div class="page">
+<div class="col">
+
+<header class="top">
+  <div class="course">
+    <b>Stanford CS329A, Self-Improving AI Agents</b>
+    Lesson 4 of the Autumn 2025 lecture series
+  </div>
+
+  <h1>Learning from Feedback with Tools and Code</h1>
+
+  <p class="deck">An agent gets better by taking seriously what came back to it — an answer from a tool, a failing test, or a critique it wrote about its own reply.</p>
+
+  <div class="lede">
+    <p>A language model, left alone, produces text and stops. It cannot check whether the fact it just stated is true, whether the program it just wrote runs, or whether the advice it gave was a bad idea. Everything it says is a guess assembled from what it read during training, and a fluent guess looks exactly like a correct one.</p>
+
+    <p>This lesson is about closing that gap by letting something outside the model answer back. Three papers, three sources of that answer: a tool that knows something the model does not, a test suite that runs the code, and a written set of principles the model applies to itself. What separates them is not the loop — the loop is the same — but where the answer comes from, and how deep into the model it goes.</p>
+  </div>
+</header>
+
+<figure>
+  <svg viewBox="0 0 680 262" role="img" aria-labelledby="fig1t fig1d">
+    <title id="fig1t">The loop shared by all three papers</title>
+    <desc id="fig1d">A model thinks, acts on the world, and observes what came back, then thinks again. A second path shows the same signal being used to update the model's weights rather than only its next step.</desc>
+
+    <rect x="30" y="86" width="152" height="56" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+    <text x="106" y="110" text-anchor="middle" font-size="12.5" fill="var(--ink)">Think</text>
+    <text x="106" y="128" text-anchor="middle" font-size="11" fill="var(--faint)">what to try next</text>
+
+    <rect x="264" y="86" width="152" height="56" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+    <text x="340" y="110" text-anchor="middle" font-size="12.5" fill="var(--teal)">Act</text>
+    <text x="340" y="128" text-anchor="middle" font-size="11" fill="var(--faint)">call a tool, run the code</text>
+
+    <rect x="498" y="86" width="152" height="56" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+    <text x="574" y="110" text-anchor="middle" font-size="12.5" fill="var(--teal)">Observe</text>
+    <text x="574" y="128" text-anchor="middle" font-size="11" fill="var(--faint)">read what came back</text>
+
+    <g stroke="var(--teal)" stroke-width="1.4" fill="none">
+      <path d="M182 114 L 254 114"/>
+      <path d="M416 114 L 488 114"/>
+    </g>
+    <path d="M262 114 l-9 -5.5 v11 z" fill="var(--teal)"/>
+    <path d="M496 114 l-9 -5.5 v11 z" fill="var(--teal)"/>
+
+    <path d="M574 142 C 574 208, 106 208, 106 148" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+    <path d="M106 140 l-5.5 9 h11 z" fill="var(--teal)"/>
+    <text x="340" y="200" text-anchor="middle" font-size="11.5" fill="var(--soft)">round again, until the answer holds up — this much stays in the prompt</text>
+
+    <path d="M650 100 C 700 50, 30 26, 30 80" fill="none" stroke="var(--ochre)" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <path d="M30 88 l-5.5 -9 h11 z" fill="var(--ochre)"/>
+    <text x="340" y="34" text-anchor="middle" font-size="11.5" fill="var(--ochre)">or the same signal becomes a reward, and the weights change</text>
+
+    <text x="340" y="240" text-anchor="middle" font-size="11" fill="var(--faint)">ReAct takes the solid path. RLEF and Constitutional AI take the dashed one as well.</text>
+  </svg>
+  <figcaption>Every method in this lesson is this diagram with a different definition of what an observation is. The distinction that matters most is which of the two return paths a method uses — one shapes the next sentence, the other shapes the model.</figcaption>
+</figure>
+
+<div class="order">
+  <h2>How to read this page</h2>
+  <ol>
+    <li><a href="#s1">Why a model needs something outside itself</a></li>
+    <li><a href="#s2">ReAct: think, act, and look at what came back</a></li>
+    <li><a href="#s3">What the loop bought, and where it strains</a></li>
+    <li><a href="#s4">RLEF: when the tests are the reward</a></li>
+    <li><a href="#s5">Constitutional AI: feedback with no one left to ask</a></li>
+    <li><a href="#s6">Where the feedback lands</a></li>
+    <li><a href="#s7">The papers behind this lesson</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<section id="s1">
+  <div class="head"><div class="num">1</div>
+    <h2>Why a model needs something outside itself</h2>
+  </div>
+
+  <p>Chain-of-thought prompting made models visibly better at showing their work, and it created a specific illusion. The steps are written out, they are legible, and they are still invented from memory. If the model goes wrong at step three, nothing intervenes. The error simply propagates through the remaining steps, dressed in the same confident prose as everything else.</p>
+
+  <p>The plainest version of the problem is knowledge the model does not have. Ask Gemini, ChatGPT, or Claude about something that happened after its training data ends and it has nothing to work with unless it goes and searches. The model cannot tell the difference between recalling and confabulating, and asking it how sure it is does not help much — models are generally overconfident and poorly calibrated about their own knowledge.</p>
+
+  <div class="note">
+    <b>The stance the lecture takes</b><br>
+    Rather than trying to get the model to report its own uncertainty accurately, give it a tool and let the tool settle the matter. Grounding beats introspection.
+  </div>
+
+  <p>So the design question becomes: what can answer back, and what happens to the answer once it arrives? The rest of this page is three answers to that, arranged roughly in order of how much external ground truth each one requires.</p>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <div class="head"><div class="num">2</div>
+    <h2>ReAct: think, act, and look at what came back</h2>
+  </div>
+
+  <p>ReAct (Yao et al., 2022) changes the shape of the trace. Instead of one uninterrupted chain of reasoning, the model alternates between three kinds of line: a <em class="term">thought</em> about what it needs next, an <em class="term">action</em> that goes and gets it, and an <em class="term">observation</em> handed back by the environment. The two halves help each other. Reasoning lets the model plan a sequence of actions and recover when one surprises it; acting keeps the plan attached to information it did not make up.</p>
+
+  <p>The example the lecture works through is a HotpotQA question that cannot be answered in one hop: what else can control the program the Apple Remote was originally designed for? A single chain of thought has to guess. ReAct looks up the Apple Remote, learns the program is Front Row, then looks up Front Row.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 268" role="img" aria-labelledby="fig2t fig2d">
+      <title id="fig2t">Chain of thought compared with a ReAct trace</title>
+      <desc id="fig2d">On the left, a closed box of reasoning steps with nothing entering or leaving. On the right, alternating thought, action and observation lines, with the action lines connected to an external Wikipedia interface.</desc>
+
+      <text x="18" y="26" font-size="12.5" fill="var(--soft)">Chain of thought</text>
+      <rect x="18" y="38" width="212" height="188" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+      <g stroke="var(--rule)" stroke-width="1.2">
+        <line x1="42" y1="72" x2="206" y2="72"/>
+        <line x1="42" y1="102" x2="188" y2="102"/>
+        <line x1="42" y1="132" x2="206" y2="132"/>
+        <line x1="42" y1="162" x2="172" y2="162"/>
+        <line x1="42" y1="192" x2="198" y2="192"/>
+      </g>
+      <text x="124" y="250" text-anchor="middle" font-size="11" fill="var(--brick)">nothing enters, so nothing corrects a wrong step</text>
+
+      <text x="262" y="26" font-size="12.5" fill="var(--soft)">ReAct</text>
+      <rect x="262" y="38" width="266" height="188" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+
+      <g font-size="11.5">
+        <text x="278" y="68" fill="var(--faint)">Thought</text>
+        <text x="336" y="68" fill="var(--soft)">find the program it controlled</text>
+        <text x="278" y="98" fill="var(--teal)">Action</text>
+        <text x="336" y="98" fill="var(--ink)">search[Apple Remote]</text>
+        <text x="278" y="128" fill="var(--faint)">Observed</text>
+        <text x="336" y="128" fill="var(--soft)">built to control Front Row</text>
+        <text x="278" y="158" fill="var(--faint)">Thought</text>
+        <text x="336" y="158" fill="var(--soft)">now find what else controls it</text>
+        <text x="278" y="188" fill="var(--teal)">Action</text>
+        <text x="336" y="188" fill="var(--ink)">search[Front Row software]</text>
+      </g>
+
+      <g fill="none" stroke="var(--teal)" stroke-width="1.4">
+        <path d="M528 94 C 560 94, 566 94, 588 94"/>
+        <path d="M588 128 C 566 128, 560 128, 528 128"/>
+      </g>
+      <path d="M596 94 l-9 -5.5 v11 z" fill="var(--teal)"/>
+      <path d="M520 128 l9 -5.5 v11 z" fill="var(--teal)"/>
+
+      <rect x="596" y="66" width="66" height="90" rx="4" fill="var(--panel)" stroke="var(--rule)" stroke-width="1.2"/>
+      <text x="629" y="106" text-anchor="middle" font-size="11.5" fill="var(--soft)">Wikipedia</text>
+      <text x="629" y="122" text-anchor="middle" font-size="11" fill="var(--faint)">API</text>
+
+      <text x="395" y="250" text-anchor="middle" font-size="11" fill="var(--teal)">every few lines, the world gets a say</text>
+    </svg>
+    <figcaption>The trace is also the audit trail. Because each claim sits next to the lookup that produced it, a person can see where an answer came from — which the paper argues matters as much as the accuracy gain.</figcaption>
+  </figure>
+
+  <p>Two details are worth noticing. The first is that this was demonstrated with a frozen model and one or two examples in the prompt: no training, just a format. The second is that ReAct was originally implemented in the era of PAL and similar prompting work, before tool calling was built into models. Today's models do much of this implicitly, which makes ReAct less a technique to apply than an abstraction to reason with — someone still has to decide, for each new domain, what counts as an action and what an observation looks like.</p>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <div class="head"><div class="num">3</div>
+    <h2>What the loop bought, and where it strains</h2>
+  </div>
+
+  <p>On question answering and fact verification, interleaving actions cut down hallucination and error propagation, because a claim the Wikipedia lookup does not support is visible as such in the trace. On interactive tasks the margin was wider: on ALFWorld, the best ReAct trial reached 71% average success against 45% for acting without reasoning, and ReAct beat imitation and reinforcement learning baselines by 34 points of absolute success rate there and 10 points on WebShop.</p>
+
+  <p>WebShop is the more sobering of the two. The agent is given a shopping instruction and has to search a cluttered catalogue, open products, choose options, and buy.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 214" role="img" aria-labelledby="fig3t fig3d">
+      <title id="fig3t">WebShop scores reported in the ReAct paper</title>
+      <desc id="fig3d">Four horizontal bars. Imitation learning 59.9, imitation plus reinforcement learning 62.4, ReAct 66.6, and human experts 82.1.</desc>
+
+      <g font-size="11.5">
+        <text x="18" y="42" fill="var(--soft)">Imitation learning</text>
+        <rect x="196" y="30" width="255" height="16" rx="8" fill="var(--soft)" opacity=".4"/>
+        <text x="461" y="42" fill="var(--faint)">59.9</text>
+
+        <text x="18" y="76" fill="var(--soft)">Imitation + RL</text>
+        <rect x="196" y="64" width="266" height="16" rx="8" fill="var(--soft)" opacity=".4"/>
+        <text x="472" y="76" fill="var(--faint)">62.4</text>
+
+        <text x="18" y="110" fill="var(--ink)">ReAct</text>
+        <rect x="196" y="98" width="284" height="16" rx="8" fill="var(--teal)" opacity=".75"/>
+        <text x="490" y="110" fill="var(--teal)">66.6</text>
+
+        <text x="18" y="144" fill="var(--ink)">Human experts</text>
+        <rect x="196" y="132" width="350" height="16" rx="8" fill="var(--ochre)" opacity=".65"/>
+        <text x="556" y="144" fill="var(--ochre)">82.1</text>
+      </g>
+
+      <line x1="196" y1="164" x2="596" y2="164" stroke="var(--rule)"/>
+      <text x="196" y="182" font-size="11" fill="var(--faint)">0</text>
+      <text x="596" y="182" font-size="11" fill="var(--faint)">100</text>
+      <text x="396" y="204" text-anchor="middle" font-size="11" fill="var(--faint)">task score on 500 WebShop test instructions</text>
+    </svg>
+    <figcaption>Scores as reported in Table 4 of the ReAct paper. On the stricter success-rate measure the gap is wider still: 40.0% for ReAct against 59.6% for human experts. Long chains of decisions where one wrong turn is unrecoverable remain hard.</figcaption>
+  </figure>
+
+  <h3>Four places it strains</h3>
+
+  <ul>
+    <li><strong>Large action spaces.</strong> The more the agent could possibly do, the more demonstrations it needs to learn the format — and demonstrations compete for the same context window as the task.</li>
+    <li><strong>Cost.</strong> Every reasoning step is more tokens and more latency, paid on every episode.</li>
+    <li><strong>Noisy or misleading observations.</strong> The loop assumes the environment tells the truth. When it does not, you need a reflection step that reasons about the input itself, and some way to back out of a path already taken.</li>
+    <li><strong>Knowing when to stop.</strong> Confidence has to come from somewhere other than the model's self-report. Running the same task repeatedly and comparing outcomes is one of the few measures available.</li>
+  </ul>
+
+  <div class="note">
+    <b>Where this is heading</b><br>
+    The lecture expects hand-written workflows like ReAct to matter less as reinforcement learning improves, because a trained model can discover its own action sequences. What survives is the workflow definition — and in domains where the search space is hard to specify in general, that definition is still the valuable part.
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <div class="head"><div class="num">4</div>
+    <h2>RLEF: when the tests are the reward</h2>
+  </div>
+
+  <p>Code is unusual among the things we ask models to produce: you can run it. That makes the feedback exact, cheap, and available in unlimited quantity — the ideal case for the dashed return path in the first diagram.</p>
+
+  <p>The problem RLEF (Gehring et al., 2024) addresses is that strong models do not naturally use it. Show a model its own failing test output and ask it to fix the program, and it often does no better than if you had thrown the attempt away and sampled a fresh one. The feedback is present in the context and is not being exploited. Nothing ever trained the model to carry information across turns.</p>
+
+  <p>RLEF fine-tunes on the multi-turn conversation end to end. The model writes a solution, the solution is executed, results return into the dialogue, the model revises. Where the design gets careful is in which tests it is allowed to see.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 300" role="img" aria-labelledby="fig4t fig4d">
+      <title id="fig4t">The RLEF loop, with public and private tests doing different jobs</title>
+      <desc id="fig4d">A model writes candidate code which is run against public tests each turn, with the error output returning to the model. A separate set of private tests, never shown to the model, produces the reward that updates the policy.</desc>
+
+      <rect x="18" y="30" width="132" height="46" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+      <text x="84" y="58" text-anchor="middle" font-size="12.5" fill="var(--ink)">problem</text>
+
+      <rect x="18" y="126" width="132" height="46" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+      <text x="84" y="154" text-anchor="middle" font-size="12.5" fill="var(--teal)">model</text>
+
+      <rect x="240" y="126" width="150" height="46" rx="4" fill="var(--panel)" stroke="var(--rule)" stroke-width="1.2"/>
+      <text x="315" y="154" text-anchor="middle" font-size="12.5" fill="var(--soft)">candidate code</text>
+
+      <rect x="470" y="112" width="152" height="60" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.2" stroke-dasharray="5 3"/>
+      <text x="546" y="138" text-anchor="middle" font-size="12.5" fill="var(--ink)">public tests</text>
+      <text x="546" y="156" text-anchor="middle" font-size="11" fill="var(--faint)">seen on every turn</text>
+
+      <rect x="470" y="228" width="152" height="60" rx="4" fill="none" stroke="var(--ochre)" stroke-width="1.5"/>
+      <text x="546" y="254" text-anchor="middle" font-size="12.5" fill="var(--ochre)">private tests</text>
+      <text x="546" y="272" text-anchor="middle" font-size="11" fill="var(--faint)">never shown to the model</text>
+
+      <g fill="none" stroke="var(--teal)" stroke-width="1.4">
+        <path d="M84 76 L 84 118"/>
+        <path d="M150 149 L 232 149"/>
+        <path d="M390 149 L 462 149"/>
+        <path d="M470 172 C 380 202, 200 202, 128 176"/>
+      </g>
+      <path d="M84 126 l-5.5 -9 h11 z" fill="var(--teal)"/>
+      <path d="M240 149 l-9 -5.5 v11 z" fill="var(--teal)"/>
+      <path d="M470 149 l-9 -5.5 v11 z" fill="var(--teal)"/>
+      <path d="M120 174 l10.5 -1 -6 -9 z" fill="var(--teal)"/>
+      <text x="300" y="212" text-anchor="middle" font-size="11" fill="var(--teal)">failing output goes back into the conversation</text>
+
+      <path d="M330 172 C 356 244, 400 258, 462 258" fill="none" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <path d="M470 258 l-9 -5.5 v11 z" fill="var(--rule)"/>
+      <text x="330" y="200" font-size="11" fill="var(--faint)">final answer only</text>
+
+      <path d="M470 268 C 300 296, 130 250, 92 178" fill="none" stroke="var(--ochre)" stroke-width="1.4"/>
+      <path d="M90 170 l-5.5 9 h11 z" fill="var(--ochre)"/>
+      <text x="256" y="288" text-anchor="middle" font-size="11" fill="var(--ochre)">reward, and a policy update</text>
+    </svg>
+    <figcaption>Two tiers of tests, two jobs. The public set is fast visible feedback the model iterates against. The private set never enters the conversation, so passing it is evidence of a solution rather than a fit to the examples shown.</figcaption>
+  </figure>
+
+  <h3>Why the split matters</h3>
+
+  <p>If the model could see the tests that determine its reward, it would learn to satisfy those particular cases — special-casing inputs, hard-coding outputs, memorising instead of solving. Holding the private set back keeps the reward honest. It is the same logic as not training on your test set, applied inside a single episode.</p>
+
+  <p>The reward itself is blunt: pass or fail, a single bit. That turns out to be enough for competitive programming, though the lecture notes that harder problems may eventually need something richer than a binary — which test failed, and how.</p>
+
+  <p>The results are reported on Llama 3.1 at both 8B and 70B, reaching state-of-the-art performance on CodeContests while requiring an order of magnitude fewer samples than before. That reduction is the practical headline. Repeated sampling can brute-force a great deal, but it is expensive; a model that reads its own error and makes a targeted edit arrives with far fewer attempts, and the improvement carried over to benchmarks it was not trained on.</p>
+
+  <div class="note">
+    <b>The question from the room</b><br>
+    Real software does not fit in a context window. Asked how this extends to a large codebase, the lecture points at the working answers rather than a solved one: summarise rather than paste, use search to retrieve only the relevant parts, or represent the repository as a graph. SWE-bench is the benchmark shaped around exactly that pair of problems — find the relevant code, then edit it.
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <div class="head"><div class="num">5</div>
+    <h2>Constitutional AI: feedback with no one left to ask</h2>
+  </div>
+
+  <p>Execution feedback works because correctness is checkable. Harmlessness is not. Whether a response is manipulative, or cruel, or quietly encouraging something dangerous, has traditionally been settled by paying people to compare pairs of responses — accurate, broad, and impossible to scale as models improve faster than labels can be collected.</p>
+
+  <p>Constitutional AI (Bai et al., 2022) moves the human contribution upstream. People write a short set of principles — avoid harmful or unethical content, be respectful, and so on. The model does everything after that.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 286" role="img" aria-labelledby="fig5t fig5d">
+      <title id="fig5t">The two stages of Constitutional AI</title>
+      <desc id="fig5d">Stage one: a first response is critiqued against a principle and rewritten, and the model is fine-tuned on the revisions. Stage two: the model compares pairs of answers to train a preference model, which supplies the reward for reinforcement learning.</desc>
+
+      <text x="18" y="26" font-size="12.5" fill="var(--soft)">Stage 1 — critique and revise</text>
+      <rect x="18" y="38" width="300" height="212" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+
+      <g font-size="11.5">
+        <rect x="42" y="62" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--brick)" stroke-width="1.3"/>
+        <text x="168" y="88" text-anchor="middle" fill="var(--soft)">a first answer, possibly harmful</text>
+
+        <rect x="42" y="126" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="168" y="152" text-anchor="middle" fill="var(--soft)">the model critiques it against a principle</text>
+
+        <rect x="42" y="190" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--moss)" stroke-width="1.3"/>
+        <text x="168" y="216" text-anchor="middle" fill="var(--moss)">the model rewrites it</text>
+      </g>
+      <g fill="none" stroke="var(--rule)" stroke-width="1.2">
+        <path d="M168 104 L 168 118"/>
+        <path d="M168 168 L 168 182"/>
+      </g>
+      <path d="M168 126 l-5 -8 h10 z" fill="var(--rule)"/>
+      <path d="M168 190 l-5 -8 h10 z" fill="var(--rule)"/>
+      <text x="168" y="272" text-anchor="middle" font-size="11" fill="var(--faint)">fine-tune on the revisions</text>
+
+      <text x="362" y="26" font-size="12.5" fill="var(--soft)">Stage 2 — preference learning</text>
+      <rect x="362" y="38" width="300" height="212" rx="4" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+
+      <g font-size="11.5">
+        <rect x="386" y="62" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--rule)"/>
+        <text x="512" y="88" text-anchor="middle" fill="var(--soft)">two candidate answers</text>
+
+        <rect x="386" y="126" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--ochre)" stroke-width="1.3"/>
+        <text x="512" y="146" text-anchor="middle" fill="var(--ochre)">the model picks the better one,</text>
+        <text x="512" y="162" text-anchor="middle" fill="var(--ochre)">reasoning step by step</text>
+
+        <rect x="386" y="190" width="252" height="42" rx="3" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.3"/>
+        <text x="512" y="216" text-anchor="middle" fill="var(--teal)">preference model, then RL</text>
+      </g>
+      <g fill="none" stroke="var(--rule)" stroke-width="1.2">
+        <path d="M512 104 L 512 118"/>
+        <path d="M512 168 L 512 182"/>
+      </g>
+      <path d="M512 126 l-5 -8 h10 z" fill="var(--rule)"/>
+      <path d="M512 190 l-5 -8 h10 z" fill="var(--rule)"/>
+      <text x="512" y="272" text-anchor="middle" font-size="11" fill="var(--faint)">no human labels anywhere in this loop</text>
+    </svg>
+    <figcaption>Both stages replace a human judgement with a model judgement anchored to written text. The constitution is the only place a person appears, which is what makes the method scale and also what makes it fragile.</figcaption>
+  </figure>
+
+  <h3>The trade-off, and why reasoning helps</h3>
+
+  <p>Harmlessness and helpfulness pull against each other. A model that refuses more is safer and less useful, and the crude version of this training makes exactly that trade. The finding worth keeping is that the frontier itself can move: having the preference model reason step by step before judging produced the best balance of the two, better than standard reinforcement learning from human feedback.</p>
+
+  <p>Nothing about the mechanism is specific to safety. Any setting where a model must follow a written set of rules — especially rules that sometimes conflict with each other — can use the same critique-and-revise loop, and generalising it beyond harmlessness is an open research direction the lecture flags as a project idea.</p>
+
+  <div class="note">
+    <b>The problem that stays open</b><br>
+    Principles get amended. Getting a model to <em>stop</em> following a rule it has already absorbed, without retraining from scratch, is a continual-learning question with no clean answer — and a governance problem as much as a technical one.
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <div class="head"><div class="num">6</div>
+    <h2>Where the feedback lands</h2>
+  </div>
+
+  <p>Reading the three papers together, two independent questions separate them. First, can anything outside the model decide whether the output was good? Second, does the verdict change only this reply, or does it change the model?</p>
+
+  <figure>
+    <svg viewBox="0 0 680 320" role="img" aria-labelledby="fig6t fig6d">
+      <title id="fig6t">The three methods placed on two axes</title>
+      <desc id="fig6d">A grid. The horizontal axis runs from feedback a tool can settle to feedback only judgement can settle. The vertical axis runs from feedback that changes only the next step to feedback that changes the weights. ReAct sits lower left, RLEF upper left, Constitutional AI upper right, and the lower right quadrant is labelled as where most agents actually operate.</desc>
+
+      <line x1="80" y1="40" x2="80" y2="252" stroke="var(--rule)"/>
+      <line x1="80" y1="252" x2="620" y2="252" stroke="var(--rule)"/>
+      <line x1="350" y1="40" x2="350" y2="252" stroke="var(--rule)" stroke-dasharray="3 5"/>
+      <line x1="80" y1="146" x2="620" y2="146" stroke="var(--rule)" stroke-dasharray="3 5"/>
+
+      <g font-size="11" fill="var(--faint)">
+        <text x="58" y="146" text-anchor="middle" transform="rotate(-90 58 146)">the verdict reaches deeper</text>
+        <text x="80" y="272" font-size="11.5">a tool can settle it</text>
+        <text x="620" y="272" text-anchor="end" font-size="11.5">only judgement can settle it</text>
+      </g>
+
+      <g font-size="11.5">
+        <rect x="104" y="62" width="200" height="56" rx="4" fill="var(--panel)" stroke="var(--teal)" stroke-width="1.4"/>
+        <text x="120" y="86" fill="var(--ink)" font-size="12.5">RLEF</text>
+        <text x="120" y="104" fill="var(--faint)">tests decide, weights change</text>
+
+        <rect x="104" y="176" width="200" height="56" rx="4" fill="var(--panel)" stroke="var(--rule)" stroke-width="1.2"/>
+        <text x="120" y="200" fill="var(--ink)" font-size="12.5">ReAct</text>
+        <text x="120" y="218" fill="var(--faint)">a tool answers, the prompt grows</text>
+
+        <rect x="376" y="62" width="220" height="56" rx="4" fill="var(--panel)" stroke="var(--ochre)" stroke-width="1.4"/>
+        <text x="392" y="86" fill="var(--ink)" font-size="12.5">Constitutional AI</text>
+        <text x="392" y="104" fill="var(--faint)">the model judges, weights change</text>
+
+        <rect x="376" y="176" width="220" height="56" rx="4" fill="none" stroke="var(--brick)" stroke-width="1.2" stroke-dasharray="5 4"/>
+        <text x="392" y="200" fill="var(--brick)" font-size="12.5">most agents in production</text>
+        <text x="392" y="218" fill="var(--faint)">an unchecked judgement, one reply</text>
+      </g>
+
+      <text x="350" y="302" text-anchor="middle" font-size="11" fill="var(--faint)">moving right removes a dependency; moving right also removes a guarantee</text>
+    </svg>
+    <figcaption>The left column is where the strong claims live, because something outside the model was consulted. The dashed quadrant is where a great deal of everyday agent behaviour actually sits, and it is the one with no safety net.</figcaption>
+  </figure>
+
+  <h3>Four things to carry forward</h3>
+
+  <ul>
+    <li><strong>Feedback in the prompt and feedback in the weights are different tools.</strong> ReAct improves an episode; RLEF and Constitutional AI improve the model. Only the second kind compounds.</li>
+    <li><strong>Separate what the model sees from what it is scored on.</strong> The public/private test split is the cheapest defence against a model that learns the benchmark rather than the task, and the principle generalises well beyond code.</li>
+    <li><strong>A blunt reward can be enough, until it is not.</strong> Pass or fail carried RLEF to state of the art. Whether outcome rewards or process rewards are right for longer, messier problems is still contested — denser signal costs judgements you may not be able to make.</li>
+    <li><strong>Model-generated feedback needs a confidence measure it does not yet have.</strong> Self-reported certainty is unreliable; repeated execution and agreement across attempts is the more honest signal, and it is expensive.</li>
+  </ul>
+
+  <div class="note">
+    <b>The closing discussion</b><br>
+    The lecture ends on cognitive science. The loop in these three papers — try, look, revise — is a rough sketch of something people do fluently, and the sketch is still crude. Where an agent's capability ends and its scaffolding begins, once memory and sessions are added around the model, is increasingly the more interesting question.
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="s7" class="sources">
+  <div class="head"><div class="num">7</div>
+    <h2>The papers behind this lesson</h2>
+  </div>
+
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a>
+    <span>Yao, Zhao, Yu, Du, Shafran, Narasimhan, Cao. ICLR 2023.</span>
+  </div>
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2410.02089">RLEF: Grounding Code LLMs in Execution Feedback with Reinforcement Learning</a>
+    <span>Gehring et al., 2024. End-to-end RL over multi-turn code repair.</span>
+  </div>
+  <div class="paper">
+    <a href="https://arxiv.org/abs/2212.08073">Constitutional AI: Harmlessness from AI Feedback</a>
+    <span>Bai et al., 2022. Self-critique, revision, and reinforcement learning from AI feedback.</span>
+  </div>
+
+  <div class="paper" style="margin-top:2.4rem">
+    <a href="https://www.youtube.com/watch?v=Lxh9RF5S-K0&list=PLangBM27OtEA&index=4">Lecture recording, Part 4: Learning from Feedback with Tools/Code</a>
+    <span>YouTube</span>
+  </div>
+  <div class="paper">
+    <a href="https://cs329a.stanford.edu/">CS329A: Self-Improving AI Agents, course page</a>
+    <span>Stanford University, Autumn 2025. Instructors Aakanksha Chowdhery and Azalia Mirhoseini.</span>
+  </div>
+</section>
+
+<div class="colophon">
+  <p>This page is a written companion to Lesson 4, organised around the three papers assigned for that class. Figures are diagrams of the concepts rather than reproductions from the papers; reported numbers are attributed where they appear.</p>
+  <p>Set for comfortable reading:</p>
+  <ul>
+    <li>No pure white and no pure black anywhere — contrast is high enough to read easily and low enough not to glare.</li>
+    <li>Three light levels in the bar above, so the page can follow the room rather than fight it.</li>
+    <li>A serif face at a generous line-height, with lines capped near 63 characters so your eye finds the next line without searching.</li>
+    <li>Diagrams distinguish things by shape, position, and label as well as colour.</li>
+    <li>Nothing moves on its own, and motion preferences set in your system are respected.</li>
+  </ul>
+</div>
+
+</div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function press(group, active) {
+    group.forEach(function (b) { b.setAttribute('aria-pressed', String(b === active)); });
+  }
+
+  var lightBtns = Array.prototype.slice.call(document.querySelectorAll('[data-light-set]'));
+  lightBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      root.setAttribute('data-light', b.dataset.lightSet);
+      press(lightBtns, b);
+    });
+  });
+
+  var sizeBtns = Array.prototype.slice.call(document.querySelectorAll('[data-size]'));
+  sizeBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      root.style.setProperty('--scale', b.dataset.size);
+      press(sizeBtns, b);
+    });
+  });
+
+  // follow the system preference on first load
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    root.setAttribute('data-light', 'night');
+    press(lightBtns, document.querySelector('[data-light-set="night"]'));
+  } else {
+    root.setAttribute('data-light', 'day');
+  }
+
+  var bar = document.getElementById('progress');
+  function tick() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? Math.min(1, window.scrollY / h) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', tick, { passive: true });
+  window.addEventListener('resize', tick);
+  tick();
+})();
+</script>
+</body>
+</html>
