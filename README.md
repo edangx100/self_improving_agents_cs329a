@@ -10,3 +10,4 @@ notes for CS329A Self-Improving AI agents lectures
 | 1 | Course Overview | [https://edangx100.github.io/self_improving_agents_cs329a/1_overview.html](https://edangx100.github.io/self_improving_agents_cs329a/1_overview.html) |
 | 2 | Test Time Compute Scaling | [https://edangx100.github.io/self_improving_agents_cs329a/2_testtime_compute_scale.html](https://edangx100.github.io/self_improving_agents_cs329a/2_testtime_compute_scale.html) |
 | 3 | Robust Verification | [https://edangx100.github.io/self_improving_agents_cs329a/3_robust_verification.html](https://edangx100.github.io/self_improving_agents_cs329a/3_robust_verification.html) |
+| 4 | Learning from Feedback with Tools and Code | [https://edangx100.github.io/self_improving_agents_cs329a/4_learning_from_feedback_tools_code.html](https://edangx100.github.io/self_improving_agents_cs329a/4_learning_from_feedback_tools_code.html) |
